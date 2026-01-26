@@ -43,9 +43,14 @@ def get_jobs():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT * FROM jobs WHERE is_active = TRUE ORDER BY created_at DESC")
+        cursor.execute("""
+            SELECT job_id, company_name, job_title, description, weights, is_active, source_file, owner_id, created_at 
+            FROM jobs 
+            WHERE is_active = TRUE 
+            ORDER BY created_at DESC
+        """)
         jobs = cursor.fetchall()
-        return jobs
+        return [dict(row) for row in jobs]
     finally:
         cursor.close()
         conn.close()
@@ -57,7 +62,7 @@ def get_leaderboard():
     try:
         cursor.execute("SELECT * FROM global_leaderboard")
         leaderboard = cursor.fetchall()
-        return leaderboard
+        return [dict(row) for row in leaderboard]
     finally:
         cursor.close()
         conn.close()
@@ -71,7 +76,7 @@ def get_user(username: str):
         user = cursor.fetchone()
         if user is None:
             raise HTTPException(status_code=404, detail="User not found")
-        return user
+        return dict(user)
     finally:
         cursor.close()
         conn.close()

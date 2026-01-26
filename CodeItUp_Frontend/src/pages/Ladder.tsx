@@ -1,32 +1,43 @@
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-// TODO: Import Badge, TrendingUp, TrendingDown, Minus when implementing backend data display
-// import { Badge } from "@/components/ui/badge"
-// import { TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 
-// TODO: Define UserRanking interface based on backend API response
-// interface UserRanking {
-//   rank: number
-//   name: string
-//   tier: string
-//   tierName: string
-//   matchScore: number
-//   streak: number
-//   change: "up" | "down" | "same"
-//   userId?: string
-// }
+interface UserRanking {
+  global_rank: number;
+  username: string;
+  current_tier: string;
+  mmr_score: number;
+  streak_count: number;
+}
 
-// TODO: Use tierColors for consistent tier styling when needed
-// const tierColors: Record<string, string> = {
-//   Champ: "bg-purple-600",
-//   Diamond: "bg-blue-500",
-//   Plat: "bg-teal-500",
-//   Gold: "bg-yellow-500",
-//   Silver: "bg-gray-400",
-//   Copper: "bg-amber-600",
-// }
+const tierColors: Record<string, string> = {
+  CEO: "bg-purple-600",
+  "Managing Director": "bg-blue-500",
+  "Senior Dev": "bg-teal-500",
+  "Junior Dev": "bg-yellow-500",
+  Intern: "bg-gray-400",
+  Barista: "bg-amber-600",
+}
 
 export function Ladder() {
-  // TODO: Add state management and API call to fetch rankings from backend
+  const [rankings, setRankings] = useState<UserRanking[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/leaderboard')
+      .then(res => res.json())
+      .then(data => {
+        setRankings(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to fetch leaderboard:", err);
+        setLoading(false);
+      });
+  }, []);
+
+  // Top 3 for visual enhancement
+  const topThree = rankings.slice(0, 3);
 
   return (
     <div className="min-h-screen bg-white">
@@ -38,30 +49,66 @@ export function Ladder() {
           </p>
         </div>
 
-        {/* Top 3 Podium */}
-        {/* TODO: Fetch top 3 users from backend API (GET /api/rankings?limit=3) */}
-        {/* TODO: Backend should return rankings sorted by overall rank/score */}
-        {/* TODO: Map over topThree array and display in podium format */}
-        <div className="grid md:grid-cols-3 gap-4 mb-8">
-          {/* TODO: Replace with actual data from backend */}
-          <div className="text-center py-8">
-            <p className="text-gray-500">Top rankings will appear here</p>
+        {/* Top 3 Podium (Simplified List for now) */}
+        {rankings.length > 0 && (
+          <div className="grid md:grid-cols-3 gap-4 mb-8">
+            {topThree.map((user) => (
+              <Card key={user.username} className="border-purple-200 text-center py-4 bg-gray-50">
+                <h3 className="text-2xl font-bold">#{user.global_rank}</h3>
+                <div className="font-semibold text-lg">{user.username}</div>
+                <Badge className={`${tierColors[user.current_tier] || 'bg-gray-500'} mt-2`}>
+                  {user.current_tier}
+                </Badge>
+                <div className="text-sm text-gray-500 mt-1">MMR: {user.mmr_score}</div>
+              </Card>
+            ))}
           </div>
-        </div>
+        )}
 
         {/* Full Rankings Table */}
-        {/* TODO: Fetch full rankings from backend API (GET /api/rankings) */}
-        {/* TODO: Backend should provide pagination if there are many users */}
-        {/* TODO: Consider adding pagination: GET /api/rankings?page=1&limit=50 */}
         <Card className="border-purple-200">
           <CardHeader>
             <CardTitle>Full Rankings</CardTitle>
             <CardDescription>Complete leaderboard of all candidates</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-12">
-              <p className="text-gray-500">Rankings will appear here when backend is connected</p>
-            </div>
+            {loading ? (
+              <p className="text-center text-gray-500 py-12">Loading rankings...</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 font-medium">Rank</th>
+                      <th className="text-left py-2 font-medium">Candidate</th>
+                      <th className="text-left py-2 font-medium">Tier</th>
+                      <th className="text-right py-2 font-medium">MMR</th>
+                      <th className="text-right py-2 font-medium">Streak</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rankings.map((user) => (
+                      <tr key={user.username} className="border-b last:border-0 hover:bg-gray-50">
+                        <td className="py-3 font-bold">#{user.global_rank}</td>
+                        <td className="py-3">{user.username}</td>
+                        <td className="py-3">
+                          <Badge className={`${tierColors[user.current_tier] || 'bg-gray-500'}`}>
+                            {user.current_tier}
+                          </Badge>
+                        </td>
+                        <td className="py-3 text-right">{user.mmr_score}</td>
+                        <td className="py-3 text-right">
+                          {user.streak_count > 0 && (
+                            <span className="text-orange-500 font-bold">🔥 {user.streak_count}</span>
+                          )}
+                          {user.streak_count === 0 && <span className="text-gray-400">-</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

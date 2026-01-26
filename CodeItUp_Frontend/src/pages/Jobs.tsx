@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { JobCard } from "@/components/JobCard"
@@ -17,11 +17,20 @@ import { JobModal } from "@/components/JobModal"
 // }
 
 export function Jobs() {
-  // TODO: Add state management and API call to fetch jobs from backend
-  // Example: const [jobs, setJobs] = useState<Job[]>([])
-  // Example: useEffect(() => { fetch('/api/jobs').then(...) }, [])
-  // TODO: Implement search functionality that queries backend API
-  // Example: const [searchTerm, setSearchTerm] = useState("")
+  interface Job {
+    job_id: string;
+    job_title: string;
+    company_name: string;
+    description: string;
+    match_score?: number;
+    applicants?: number;
+    location?: string;
+  }
+
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const [selectedJob, setSelectedJob] = useState<{
     jobId: string
@@ -31,35 +40,27 @@ export function Jobs() {
     matchScore?: number
   } | null>(null)
 
-  // Example job data for demonstration
-  const exampleJob = {
-    jobId: "1",
-    title: "SoC Integration Engineer",
-    company: "TechCorp Inc.",
-    location: "Remote",
-    description: `SoC Integration Engineer
-========================
+  useEffect(() => {
+    fetch('/api/jobs')
+      .then(res => {
+        if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
+        return res.json();
+      })
+      .then(data => {
+        setJobs(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error("Failed to fetch jobs:", err);
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
 
-Role Description:
-This role supports independent technical contribution in the area of soc integration engineer, combining design, implementation, and evaluation responsibilities. The position requires reasoning about system behavior, performance trade-offs, and experimental outcomes. Depending on the organization, the work may include applied research, prototype development, or deployment-oriented engineering. Collaboration with interdisciplinary teams is expected, along with clear communication of results and design decisions. The role operates across a mix of exploratory development, experimental validation, and production systems. Clear written and verbal communication is required to explain technical concepts and trade-offs to diverse audiences.
-
-Qualifications:
-- Background in computer science, engineering, or a closely related discipline
-- Experience with modern programming languages, tools, or development environments
-- Ability to analyze system behavior, performance, or correctness
-- Strong problem-solving and analytical skills
-- Experience conducting experiments or empirical evaluations
-
-Salary Range (Canada):
-CAD $95,000–$145,000
-
-Track:
-Applied / Engineering
-Career Level:
-Mid`,
-    applicants: 45,
-    matchScore: 82
-  }
+  const filteredJobs = jobs.filter(job =>
+    job.job_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    job.company_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-white">
@@ -70,71 +71,57 @@ Mid`,
         </div>
 
         {/* Search Bar */}
-        {/* TODO: Connect search input to backend API */}
-        {/* TODO: Implement debounced search or search on submit */}
         <div className="mb-8">
           <div className="relative max-w-2xl">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <Input
               type="text"
               placeholder="Search jobs by title, company, or location..."
-              // TODO: Add value={searchTerm} and onChange handler
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
             />
           </div>
         </div>
 
-        {/* Job Listings */}
-        {/* TODO: Fetch jobs from backend API (GET /api/jobs) */}
-        {/* TODO: Backend will return job.description as txt file content (string) */}
-        {/* TODO: Map over jobs array and display compact job cards */}
-        {/* Example usage: */}
-        {/* {jobs.map((job) => (
-          <JobCard
-            key={job.id}
-            jobId={job.id}
-            title={job.title}
-            company={job.company}
-            location={job.location}
-            description={job.description}
-            applicants={job.applicants}
-            matchScore={job.matchScore}
-            onClick={() => setSelectedJob({
-              jobId: job.id,
-              title: job.title,
-              company: job.company,
-              description: job.description,
-              matchScore: job.matchScore
-            })}
-          />
-        ))} */}
-
-        <div className="space-y-4">
-          {/* Example job card - remove when backend is connected */}
-          <div className="mb-4">
-            <p className="text-sm text-gray-500 mb-4 italic">Example: Compact job card (click to view details)</p>
-            <JobCard
-              jobId={exampleJob.jobId}
-              title={exampleJob.title}
-              company={exampleJob.company}
-              location={exampleJob.location}
-              description={exampleJob.description}
-              applicants={exampleJob.applicants}
-              matchScore={exampleJob.matchScore}
-              onClick={() => setSelectedJob({
-                jobId: exampleJob.jobId,
-                title: exampleJob.title,
-                company: exampleJob.company,
-                description: exampleJob.description,
-                matchScore: exampleJob.matchScore
-              })}
-            />
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+            <strong>Error loading jobs:</strong> {error}
+            <p className="text-sm mt-1">Make sure the backend server is running on port 3000.</p>
           </div>
+        )}
 
-          <div className="text-center py-8">
-            <p className="text-gray-500">More job listings will appear here when backend is connected</p>
+        {/* Job Listings using Real Data */}
+        {loading ? (
+          <p className="text-center text-gray-500">Loading jobs...</p>
+        ) : (
+          <div className="space-y-4">
+            {filteredJobs.map((job) => (
+              <JobCard
+                key={job.job_id}
+                jobId={job.job_id}
+                title={job.job_title}
+                company={job.company_name}
+                location={job.location || "Remote"}
+                description={job.description}
+                applicants={job.applicants || Math.floor(Math.random() * 50) + 1}
+                matchScore={job.match_score || 0}
+                onClick={() => setSelectedJob({
+                  jobId: job.job_id,
+                  title: job.job_title,
+                  company: job.company_name,
+                  description: job.description,
+                  matchScore: job.match_score
+                })}
+              />
+            ))}
+
+            {!error && filteredJobs.length === 0 && (
+              <p className="text-center text-gray-500">No jobs found matching your search.</p>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Job Detail Modal */}
         {selectedJob && (
