@@ -5,6 +5,7 @@ import { Jobs } from "@/pages/Jobs"
 import { Upload } from "@/pages/Upload"
 import { Ladder } from "@/pages/Ladder"
 import { Profile } from "@/pages/Profile"
+import { Auth } from "@/pages/Auth"
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
           <Route path="/jobs" element={<Jobs />} />
           <Route path="/upload" element={<Upload />} />
           <Route path="/ladder" element={<Ladder />} />
+          <Route path="/login" element={<Auth />} />
           <Route path="/profile" element={<Profile />} />
         </Routes>
       </div>

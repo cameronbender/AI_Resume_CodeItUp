@@ -1,22 +1,59 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
+import { RankBadge } from "@/components/RankBadge"
 // TODO: Import Badge, Trophy when implementing backend data display
 // import { Badge } from "@/components/ui/badge"
-import { Target, TrendingUp, Award } from "lucide-react"
+import { Target, TrendingUp } from "lucide-react"
+// TODO: Import Award, Trophy when implementing backend data display
+// import { Award } from "lucide-react"
 // import { Trophy } from "lucide-react"
 
 // TODO: Define interfaces based on backend API response
+// Backend should return currentTier as one of: "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger"
+// Or map profile tier names (Copper, Silver, Gold, Plat, Diamond, Champ) to RankBadge tiers
 // interface UserProfile {
 //   userId: string
 //   name: string
-//   currentTier: string
-//   currentTierName: string
+//   currentTier: "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger" // TODO: Map from backend tier names
+//   currentTierName: string // e.g., "Barista/McDonalds", "Intern", etc.
+//   badgeStyle?: "shield" | "gauntlet" // Optional: backend can specify badge style
 //   nextTierName: string
 //   progressToNext: number
 //   matchScore: number
 //   overallRank: number
 //   streak: number
 //   totalApplications: number
+// }
+
+/**
+ * Maps profile tier names to RankBadge tier names
+ * TODO: Backend should return tier in RankBadge format, or use this mapping
+ * TODO: Use this function when displaying rank badge: mapTierToRankBadge(profile.currentTier)
+ */
+// function mapTierToRankBadge(profileTier: string): "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger" {
+//   const tierMap: Record<string, "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger"> = {
+//     "Copper": "Iron",
+//     "Barista/McDonalds": "Iron",
+//     "Intern": "Bronze",
+//     "Silver": "Silver",
+//     "Junior Dev": "Silver",
+//     "Gold": "Gold",
+//     "Senior Dev": "Gold",
+//     "Plat": "Gold",
+//     "Platinum": "Gold",
+//     "Diamond": "Challenger",
+//     "WFH Managing Director": "Challenger",
+//     "Champ": "Challenger",
+//     "CEO": "Challenger",
+//   }
+//   
+//   // If backend returns RankBadge format directly, use it
+//   if (["Iron", "Bronze", "Silver", "Gold", "Challenger"].includes(profileTier)) {
+//     return profileTier as "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger"
+//   }
+//   
+//   // Otherwise map from profile tier name
+//   return tierMap[profileTier] || "Iron"
 // }
 // interface RecentMatch {
 //   jobId: string
@@ -41,9 +78,8 @@ export function Profile() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-6">
                   {/* TODO: Display tier badge from profile.currentTier */}
-                  <div className="w-20 h-20 rounded-full bg-gray-300 flex items-center justify-center text-white font-bold text-3xl">
-                    ?
-                  </div>
+                  {/* TODO: Use RankBadge component: <RankBadge tier={mapTierToRankBadge(profile.currentTier)} size="lg" /> */}
+                  <RankBadge tier="Iron" size="lg" />
                   <div>
                     <CardTitle className="text-3xl text-black">Your Profile</CardTitle>
                     {/* TODO: Display profile.currentTierName */}
