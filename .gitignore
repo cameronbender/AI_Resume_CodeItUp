@@ -1,0 +1,12 @@
+.DS_Store
+.vscode/settings.json
+.env
+# Node.js
+node_modules/
+.env
+npm-debug.log*
+.grunt
+.idea
+.vscode
+_resumes
+_jobs
