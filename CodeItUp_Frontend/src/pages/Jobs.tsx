@@ -22,7 +22,7 @@ export function Jobs() {
   // Example: useEffect(() => { fetch('/api/jobs').then(...) }, [])
   // TODO: Implement search functionality that queries backend API
   // Example: const [searchTerm, setSearchTerm] = useState("")
-  
+
   const [selectedJob, setSelectedJob] = useState<{
     jobId: string
     title: string
@@ -108,7 +108,7 @@ Mid`,
             })}
           />
         ))} */}
-        
+
         <div className="space-y-4">
           {/* Example job card - remove when backend is connected */}
           <div className="mb-4">
@@ -130,7 +130,7 @@ Mid`,
               })}
             />
           </div>
-          
+
           <div className="text-center py-8">
             <p className="text-gray-500">More job listings will appear here when backend is connected</p>
           </div>

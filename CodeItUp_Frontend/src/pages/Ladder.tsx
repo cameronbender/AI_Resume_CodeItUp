@@ -27,7 +27,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export function Ladder() {
   // TODO: Add state management and API call to fetch rankings from backend
-  
+
   return (
     <div className="min-h-screen bg-white">
       <div className="container mx-auto px-4 py-8">
