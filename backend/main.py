@@ -39,18 +39,31 @@ def read_root():
     return {"message": "Gauntlet.io API is running"}
 
 @app.get("/api/jobs")
-def get_jobs():
+def get_jobs(page: int = 1, limit: int = 20):
     conn = get_db_connection()
     cursor = conn.cursor()
+    offset = (page - 1) * limit
     try:
+        # Get total count
+        cursor.execute("SELECT count(*) FROM jobs WHERE is_active = TRUE")
+        total = cursor.fetchone()['count']
+
+        # Get paginated data
         cursor.execute("""
             SELECT job_id, company_name, job_title, description, weights, is_active, source_file, owner_id, created_at 
             FROM jobs 
             WHERE is_active = TRUE 
             ORDER BY created_at DESC
-        """)
+            LIMIT %s OFFSET %s
+        """, (limit, offset))
         jobs = cursor.fetchall()
-        return [dict(row) for row in jobs]
+        
+        return {
+            "data": [dict(row) for row in jobs],
+            "total": total,
+            "page": page,
+            "limit": limit
+        }
     finally:
         cursor.close()
         conn.close()

@@ -1,36 +1,38 @@
 import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
-import { Search } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Search, ChevronLeft, ChevronRight } from "lucide-react"
 import { JobCard } from "@/components/JobCard"
 import { JobModal } from "@/components/JobModal"
 
-// TODO: Define Job interface based on backend API response
-// interface Job {
-//   id: string
-//   title: string
-//   company: string
-//   location: string
-//   salary: string
-//   description: string // This will be the txt file content as a string
-//   applicants: number
-//   matchScore?: number
-// }
+interface Job {
+  job_id: string;
+  job_title: string;
+  company_name: string;
+  description: string;
+  match_score?: number;
+  applicants?: number;
+  location?: string;
+}
+
+interface JobsResponse {
+  data: Job[];
+  total: number;
+  page: number;
+  limit: number;
+}
 
 export function Jobs() {
-  interface Job {
-    job_id: string;
-    job_title: string;
-    company_name: string;
-    description: string;
-    match_score?: number;
-    applicants?: number;
-    location?: string;
-  }
-
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Pagination State
+  const [page, setPage] = useState(1);
+  const [limit] = useState(20);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalJobs, setTotalJobs] = useState(0);
 
   const [selectedJob, setSelectedJob] = useState<{
     jobId: string
@@ -41,13 +43,16 @@ export function Jobs() {
   } | null>(null)
 
   useEffect(() => {
-    fetch('/api/jobs')
+    setLoading(true);
+    fetch(`/api/jobs?page=${page}&limit=${limit}`)
       .then(res => {
         if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
         return res.json();
       })
-      .then(data => {
-        setJobs(data);
+      .then((data: JobsResponse) => {
+        setJobs(data.data);
+        setTotalJobs(data.total);
+        setTotalPages(Math.ceil(data.total / limit));
         setLoading(false);
       })
       .catch(err => {
@@ -55,12 +60,22 @@ export function Jobs() {
         setError(err.message);
         setLoading(false);
       });
-  }, []);
+  }, [page, limit]);
 
+  // Client-side filtering for the current page
+  // Note: For full dataset search, backend search implementation is required.
   const filteredJobs = jobs.filter(job =>
     job.job_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     job.company_name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handlePreviousPage = () => {
+    if (page > 1) setPage(page - 1);
+  };
+
+  const handleNextPage = () => {
+    if (page < totalPages) setPage(page + 1);
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -76,7 +91,7 @@ export function Jobs() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <Input
               type="text"
-              placeholder="Search jobs by title, company, or location..."
+              placeholder="Search jobs on this page..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
@@ -92,33 +107,66 @@ export function Jobs() {
           </div>
         )}
 
-        {/* Job Listings using Real Data */}
+        {/* Job Listings */}
         {loading ? (
           <p className="text-center text-gray-500">Loading jobs...</p>
         ) : (
-          <div className="space-y-4">
-            {filteredJobs.map((job) => (
-              <JobCard
-                key={job.job_id}
-                jobId={job.job_id}
-                title={job.job_title}
-                company={job.company_name}
-                location={job.location || "Remote"}
-                description={job.description}
-                applicants={job.applicants || Math.floor(Math.random() * 50) + 1}
-                matchScore={job.match_score || 0}
-                onClick={() => setSelectedJob({
-                  jobId: job.job_id,
-                  title: job.job_title,
-                  company: job.company_name,
-                  description: job.description,
-                  matchScore: job.match_score
-                })}
-              />
-            ))}
+          <div className="space-y-6">
+            <div className="space-y-4">
+              {filteredJobs.map((job) => (
+                <JobCard
+                  key={job.job_id}
+                  jobId={job.job_id}
+                  title={job.job_title}
+                  company={job.company_name}
+                  location={job.location || "Remote"}
+                  description={job.description}
+                  applicants={job.applicants || Math.floor(Math.random() * 50) + 1}
+                  matchScore={job.match_score || 0}
+                  onClick={() => setSelectedJob({
+                    jobId: job.job_id,
+                    title: job.job_title,
+                    company: job.company_name,
+                    description: job.description,
+                    matchScore: job.match_score
+                  })}
+                />
+              ))}
 
-            {!error && filteredJobs.length === 0 && (
-              <p className="text-center text-gray-500">No jobs found matching your search.</p>
+              {!error && filteredJobs.length === 0 && (
+                <p className="text-center text-gray-500">No jobs found on this page.</p>
+              )}
+            </div>
+
+            {/* Pagination Controls */}
+            {!error && jobs.length > 0 && (
+              <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+                <div className="text-sm text-gray-500">
+                  Showing <span className="font-medium">{Math.min((page - 1) * limit + 1, totalJobs)}</span> to{" "}
+                  <span className="font-medium">{Math.min(page * limit, totalJobs)}</span> of{" "}
+                  <span className="font-medium">{totalJobs}</span> results
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePreviousPage}
+                    disabled={page === 1}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleNextPage}
+                    disabled={page === totalPages}
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         )}
