@@ -122,7 +122,6 @@ export function Jobs() {
                   location={job.location || "Remote"}
                   description={job.description}
                   applicants={job.applicants || Math.floor(Math.random() * 50) + 1}
-                  matchScore={job.match_score || 0}
                   onClick={() => setSelectedJob({
                     jobId: job.job_id,
                     title: job.job_title,
