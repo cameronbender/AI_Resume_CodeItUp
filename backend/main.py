@@ -5,9 +5,9 @@ from fastapi import FastAPI, HTTPException, status, File, UploadFile, Form, Head
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pydantic import BaseModel, EmailStr
-from passlib.context import CryptContext
+import bcrypt
 from typing import Optional
-from resumeScorer import scoreResumePDF
+from resumeScorer import scoreResume
 
 # Load environment variables from parent directory
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
@@ -23,14 +23,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Password Hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Password Hashing (bcrypt has a 72-byte limit; we truncate for consistency)
+BCRYPT_MAX_PASSWORD_BYTES = 72
 
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def _password_bytes(password: str) -> bytes:
+    return password.encode("utf-8")[:BCRYPT_MAX_PASSWORD_BYTES]
 
-def get_password_hash(password):
-    return pwd_context.hash(password)
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if isinstance(hashed_password, bytes):
+        hashed_password = hashed_password.decode("utf-8")
+    return bcrypt.checkpw(_password_bytes(plain_password), hashed_password.encode("utf-8"))
+
+def get_password_hash(password: str) -> str:
+    return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 # Pydantic Models
 class UserSignup(BaseModel):
@@ -98,13 +103,21 @@ def signup(user: UserSignup):
         
         new_user = cursor.fetchone()
         conn.commit()
-        
-        return dict(new_user)
+        # Ensure types for JSON (user_id as str, has_resume as bool)
+        return {
+            "user_id": str(new_user["user_id"]),
+            "username": new_user["username"],
+            "email": new_user["email"],
+            "role": new_user["role"],
+            "mmr_score": new_user["mmr_score"],
+            "current_tier": new_user["current_tier"],
+            "has_resume": bool(new_user["has_resume"]),
+        }
         
     except psycopg2.Error as e:
         conn.rollback()
         print(f"Database Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal Server Error")
     finally:
         cursor.close()
         conn.close()
@@ -209,20 +222,9 @@ def apply_to_job(app_req: ApplicationRequest):
              raise HTTPException(status_code=400, detail="Resume required")
 
         # Create application. Isaac look here when connecting to AI 
-        # Get job description to score against
-        cursor.execute("SELECT description FROM jobs WHERE job_id = %s", (app_req.job_id,))
-        job_data = cursor.fetchone()
-        if not job_data:
-             raise HTTPException(status_code=404, detail="Job not found")
-        
-        try:
-            match_score = int(scoreResumePDF(resume_data, job_data['description']))
-        except Exception as e:
-            print(f"Scoring Error: {e}")
-            match_score = 75 # Fallback if AI fails
-        
         # Dumb mock analysis for now
         analysis = '{"strengths": ["Quick Apply"], "weaknesses": [], "ai_insult": "You used quick apply, lazy?"}'
+        match_score = 75.0 # Mock score
 
         cursor.execute("""
             INSERT INTO applications (user_id, job_id, match_score, analysis, resume_data, resume_filename)
