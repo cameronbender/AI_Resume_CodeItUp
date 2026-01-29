@@ -3,7 +3,6 @@
 -- DROP TABLE IF EXISTS jobs;
 -- DROP TABLE IF EXISTS users;
 -- DROP TYPE IF EXISTS rank_tier;
-
 -- CREATE CUSTOM TYPES
 -- This ensures data integrity for the ranks
 CREATE TYPE rank_tier AS ENUM (
@@ -15,7 +14,6 @@ CREATE TYPE rank_tier AS ENUM (
     'CEO'
 );
 CREATE TYPE user_role AS ENUM ('candidate', 'recruiter', 'admin');
-
 -- USERS TABLE (The Players)
 CREATE TABLE users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -26,10 +24,11 @@ CREATE TABLE users (
     mmr_score INT DEFAULT 0 CHECK (mmr_score >= 0),
     current_tier rank_tier DEFAULT 'Barista',
     streak_count INT DEFAULT 0,
+    resume_data BYTEA,
+    resume_filename VARCHAR(255),
     last_applied_at TIMESTAMP,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
 -- JOBS TABLE (The Dungeons)
 CREATE TABLE jobs (
     job_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -45,7 +44,6 @@ CREATE TABLE jobs (
     SET NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
 -- APPLICATIONS TABLE (The Encounters)
 CREATE TABLE applications (
     app_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -65,7 +63,6 @@ CREATE TABLE applications (
     -- Stores file name, page count, etc.
     applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
 -- Global leaderboard view
 CREATE VIEW global_leaderboard AS
 SELECT username,
@@ -78,17 +75,13 @@ SELECT username,
 FROM users
 WHERE mmr_score > 0
 LIMIT 100;
-
 -- Performance & Scaling
 -- Speed up leaderboard sorting
 CREATE INDEX idx_users_mmr ON users (mmr_score DESC);
-
 -- Speed up finding all applications for a specific user
 CREATE INDEX idx_apps_user_id ON applications (user_id);
-
 -- Speed up finding the most relevant jobs
 CREATE INDEX idx_jobs_active ON jobs (is_active);
-
 -- "Evil" MMR Update Function
 CREATE OR REPLACE FUNCTION update_user_rank() RETURNS TRIGGER AS $$ BEGIN -- Update the User's MMR, Streak, and Tier based on the new application score
 UPDATE users

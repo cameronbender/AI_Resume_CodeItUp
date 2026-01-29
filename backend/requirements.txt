@@ -5,5 +5,7 @@ python-dotenv
 passlib[bcrypt]
 email-validator
 pydantic
+python-multipart
 pdfplumber
+
 

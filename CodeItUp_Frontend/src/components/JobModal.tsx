@@ -4,7 +4,6 @@ import { JobDescription } from "./JobDescription"
 import { Button } from "@/components/ui/button"
 import { RankBadge } from "@/components/RankBadge"
 import { useAuth } from "@/contexts/AuthContext"
-import { useProfileResume } from "@/contexts/ProfileResumeContext"
 import { Zap, Loader2, CheckCircle2, Users } from "lucide-react"
 
 interface TopApplicant {
@@ -49,7 +48,6 @@ export function JobModal({
   description,
 }: JobModalProps) {
   const { user, isAuthenticated } = useAuth()
-  const { profileResume, hasResume } = useProfileResume()
   const [topApplicants, setTopApplicants] = useState<TopApplicant[]>([])
   const [applicantsLoading, setApplicantsLoading] = useState(false)
   const [quickApplyLoading, setQuickApplyLoading] = useState(false)
@@ -76,25 +74,36 @@ export function JobModal({
       setQuickApplyError("Please log in to Quick Apply.")
       return
     }
-    if (!hasResume && !profileResume) {
+    // Check if user has resume on file (from auth context backend data) or if they just uploaded one locally (profileResume)
+    // Ideally we should just rely on user.has_resume. 
+    // If profileResume exists contextually but not in backend yet, that's an edge case, but we assume upload updates backend.
+
+    // Fallback: if user.has_resume is false, we can't quick apply via backend unless we upload first.
+    // Since we simplified: Profile uploads to backend. JobModal just triggers "use stored resume".
+
+    if (!user.has_resume) {
       setQuickApplyError("Upload your resume on your Profile first, then Quick Apply.")
       return
     }
+
     setQuickApplyError(null)
     setQuickApplyLoading(true)
     try {
-      const formData = new FormData()
-      formData.append("user_id", user.user_id)
-      if (profileResume) formData.append("resume", profileResume)
-
-      const res = await fetch(`/api/jobs/${jobId}/apply`, {
+      const res = await fetch("/api/applications", {
         method: "POST",
-        body: formData,
-        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.user_id,
+          job_id: jobId,
+          use_profile_resume: true
+        }),
       })
+
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.detail || "Apply failed")
+
       setQuickApplyDone(true)
+      // TODO: Update top applicants list
     } catch (err: unknown) {
       setQuickApplyError(err instanceof Error ? err.message : "Quick Apply failed")
     } finally {
@@ -123,7 +132,7 @@ export function JobModal({
             <div className="border-t border-gray-200 pt-4">
               <Button
                 onClick={handleQuickApply}
-                disabled={quickApplyLoading || quickApplyDone || (!hasResume && !profileResume)}
+                disabled={quickApplyLoading || quickApplyDone || !user?.has_resume}
                 className="w-full bg-primary hover:bg-primary/90"
                 size="lg"
               >
@@ -146,6 +155,11 @@ export function JobModal({
               </Button>
               {quickApplyError && (
                 <p className="text-sm text-red-600 mt-2">{quickApplyError}</p>
+              )}
+              {user && !user.has_resume && (
+                <p className="text-sm text-yellow-600 mt-2">
+                  Please upload a resume on your Profile page to enable Quick Apply.
+                </p>
               )}
               {!isAuthenticated && (
                 <p className="text-sm text-gray-500 mt-2">Log in and add a resume on your Profile to Quick Apply.</p>

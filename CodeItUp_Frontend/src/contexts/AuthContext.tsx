@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 
 export interface User {
   user_id: string
@@ -7,6 +7,7 @@ export interface User {
   role: "candidate" | "recruiter"
   mmr_score: number
   current_tier: string
+  has_resume: boolean
 }
 
 interface AuthContextType {
