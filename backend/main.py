@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, EmailStr
 import bcrypt
 from typing import Optional
-from resumeScorer import scoreResume
+from resumeScorer import scoreResumePDF
 
 # Load environment variables from parent directory
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
@@ -222,7 +222,6 @@ def apply_to_job(app_req: ApplicationRequest):
              raise HTTPException(status_code=400, detail="Resume required")
 
         # Create application. Isaac look here when connecting to AI 
-        
         # Get job description to score against
         cursor.execute("SELECT description FROM jobs WHERE job_id = %s", (app_req.job_id,))
         job_data = cursor.fetchone()
