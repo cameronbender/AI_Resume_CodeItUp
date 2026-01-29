@@ -203,7 +203,7 @@ export function Auth() {
 
             <Button
               type="submit"
-              className={`w-full ${role === 'recruiter' && !isLogin ? 'bg-blue-600 hover:bg-blue-700' : 'bg-black hover:bg-gray-800'}`}
+              className={`w-full ${role === 'recruiter' && !isLogin ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-gray-800'}`}
               size="lg"
               disabled={loading}
             >
