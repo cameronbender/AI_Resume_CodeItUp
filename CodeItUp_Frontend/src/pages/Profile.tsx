@@ -4,8 +4,7 @@ import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
 import { RankBadge } from "@/components/RankBadge"
 import { useAuth } from "@/contexts/AuthContext"
-import { useProfileResume } from "@/contexts/ProfileResumeContext"
-import { Target, TrendingUp, Upload as UploadIcon, FileText, CheckCircle2 } from "lucide-react"
+import { TrendingUp, Upload as UploadIcon, FileText, CheckCircle2 } from "lucide-react"
 // TODO: Import Award, Trophy when implementing backend data display
 // import { Award } from "lucide-react"
 // import { Trophy } from "lucide-react"
@@ -52,8 +51,7 @@ function mapTierToRankBadge(profileTier?: string): "Iron" | "Bronze" | "Silver" 
 // }
 
 export function Profile() {
-  const { user: authUser } = useAuth()
-  const { setProfileResume, hasResume } = useProfileResume()
+  const { user: authUser, setUser } = useAuth()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploaded, setUploaded] = useState(false)
 
@@ -64,10 +62,31 @@ export function Profile() {
     }
   }
 
-  const handleUpload = () => {
-    if (selectedFile) {
-      setProfileResume(selectedFile)
-      setUploaded(true)
+  const handleUpload = async () => {
+    if (selectedFile && authUser) {
+      const formData = new FormData()
+      formData.append("user_id", authUser.user_id)
+      formData.append("file", selectedFile)
+
+      try {
+        const res = await fetch("/api/user/resume", {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!res.ok) throw new Error("Upload failed")
+
+        await res.json()
+        setUploaded(true)
+
+        // Update user context to reflect resume exists
+        if (authUser) {
+          setUser({ ...authUser, has_resume: true })
+        }
+      } catch (err) {
+        console.error("Upload error:", err)
+        // TODO: Show error toast
+      }
     }
   }
 
@@ -111,7 +130,7 @@ export function Profile() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Resume on file</p>
-                  <p className="text-4xl font-bold text-black">{hasResume ? "Yes" : "No"}</p>
+                  <p className="text-4xl font-bold text-black">{authUser?.has_resume ? "Yes" : "No"}</p>
                 </div>
               </div>
             </CardContent>
@@ -176,7 +195,7 @@ export function Profile() {
                             {(selectedFile.size / 1024).toFixed(2)} KB
                           </p>
                         </div>
-                      ) : hasResume ? (
+                      ) : authUser?.has_resume ? (
                         <div className="space-y-2">
                           <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
                           <p className="text-sm font-medium text-black">Resume on file</p>
@@ -197,7 +216,7 @@ export function Profile() {
                     className="w-full bg-primary hover:bg-primary/90"
                     size="lg"
                   >
-                    {uploaded || hasResume ? (
+                    {uploaded || authUser?.has_resume ? (
                       <>
                         <CheckCircle2 className="h-5 w-5 mr-2" />
                         {uploaded ? "Resume saved for Quick Apply" : "Resume on file"}
