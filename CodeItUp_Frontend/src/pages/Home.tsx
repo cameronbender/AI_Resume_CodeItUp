@@ -42,9 +42,9 @@ export function Home() {
                   Browse Jobs
                 </Button>
               </Link>
-              <Link to="/upload">
+              <Link to="/profile">
                 <Button size="lg" variant="outline" className="border-purple-300 text-purple-700">
-                  Upload Resume
+                  Profile & Resume
                 </Button>
               </Link>
             </div>

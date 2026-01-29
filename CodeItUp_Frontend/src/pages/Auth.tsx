@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from "@/contexts/AuthContext"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -7,7 +8,9 @@ import { LogIn, UserPlus, Briefcase, User } from "lucide-react"
 
 export function Auth() {
   const navigate = useNavigate()
+  const { setUser } = useAuth()
   const [isLogin, setIsLogin] = useState(true)
+  const [emailOrUsername, setEmailOrUsername] = useState("")
   const [email, setEmail] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -23,13 +26,18 @@ export function Auth() {
     setLoading(true)
 
     // Basic Validation
-    if (!email || !password) {
-      setError("Please fill in all required fields")
-      setLoading(false)
-      return
-    }
-
-    if (!isLogin) {
+    if (isLogin) {
+      if (!emailOrUsername || !password) {
+        setError("Please fill in all required fields")
+        setLoading(false)
+        return
+      }
+    } else {
+      if (!email || !password) {
+        setError("Please fill in all required fields")
+        setLoading(false)
+        return
+      }
       if (password !== confirmPassword) {
         setError("Passwords do not match")
         setLoading(false)
@@ -44,7 +52,7 @@ export function Auth() {
 
     const endpoint = isLogin ? "/api/auth/login" : "/api/auth/signup"
     const body = isLogin
-      ? { email, password }
+      ? { email_or_username: emailOrUsername, password }
       : { email, password, username, role }
 
     try {
@@ -60,11 +68,10 @@ export function Auth() {
         throw new Error(data.detail || "Authentication failed")
       }
 
-      // Save user info (INSECURE: FOR DEMO ONLY)
-      localStorage.setItem("user", JSON.stringify(data))
+      setUser(data)
 
-      // Redirect
-      navigate(role === "recruiter" ? "/upload" : "/jobs")
+      // Redirect: recruiter -> My Jobs, applicant -> Jobs
+      navigate(data.role === "recruiter" ? "/my-jobs" : "/jobs")
 
     } catch (err: any) {
       console.error("Auth error:", err)
@@ -128,29 +135,41 @@ export function Auth() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
+            {isLogin ? (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email or username</label>
                 <Input
                   type="text"
-                  placeholder="johndoe"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="you@example.com or johndoe"
+                  value={emailOrUsername}
+                  onChange={(e) => setEmailOrUsername(e.target.value)}
                   disabled={loading}
                 />
               </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                  <Input
+                    type="text"
+                    placeholder="johndoe"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </>
             )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <Input
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={loading}
-              />
-            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>

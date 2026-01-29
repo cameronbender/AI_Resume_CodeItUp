@@ -1,9 +1,11 @@
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
+import { Button } from "@/components/ui/button"
 import { RankBadge } from "@/components/RankBadge"
-// TODO: Import Badge, Trophy when implementing backend data display
-// import { Badge } from "@/components/ui/badge"
-import { Target, TrendingUp } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
+import { useProfileResume } from "@/contexts/ProfileResumeContext"
+import { Target, TrendingUp, Upload as UploadIcon, FileText, CheckCircle2 } from "lucide-react"
 // TODO: Import Award, Trophy when implementing backend data display
 // import { Award } from "lucide-react"
 // import { Trophy } from "lucide-react"
@@ -25,36 +27,22 @@ import { Target, TrendingUp } from "lucide-react"
 //   totalApplications: number
 // }
 
-/**
- * Maps profile tier names to RankBadge tier names
- * TODO: Backend should return tier in RankBadge format, or use this mapping
- * TODO: Use this function when displaying rank badge: mapTierToRankBadge(profile.currentTier)
- */
-// function mapTierToRankBadge(profileTier: string): "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger" {
-//   const tierMap: Record<string, "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger"> = {
-//     "Copper": "Iron",
-//     "Barista/McDonalds": "Iron",
-//     "Intern": "Bronze",
-//     "Silver": "Silver",
-//     "Junior Dev": "Silver",
-//     "Gold": "Gold",
-//     "Senior Dev": "Gold",
-//     "Plat": "Gold",
-//     "Platinum": "Gold",
-//     "Diamond": "Challenger",
-//     "WFH Managing Director": "Challenger",
-//     "Champ": "Challenger",
-//     "CEO": "Challenger",
-//   }
-//   
-//   // If backend returns RankBadge format directly, use it
-//   if (["Iron", "Bronze", "Silver", "Gold", "Challenger"].includes(profileTier)) {
-//     return profileTier as "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger"
-//   }
-//   
-//   // Otherwise map from profile tier name
-//   return tierMap[profileTier] || "Iron"
-// }
+
+function mapTierToRankBadge(profileTier?: string): "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger" {
+  const tierMap: Record<string, "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger"> = {
+    Barista: "Iron",
+    Intern: "Bronze",
+    "Junior Dev": "Silver",
+    "Senior Dev": "Gold",
+    "Managing Director": "Challenger",
+    CEO: "Challenger",
+  }
+  if (!profileTier) return "Iron"
+  if (["Iron", "Bronze", "Silver", "Gold", "Challenger"].includes(profileTier)) {
+    return profileTier as "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger"
+  }
+  return tierMap[profileTier] || "Iron"
+}
 // interface RecentMatch {
 //   jobId: string
 //   job: string
@@ -64,8 +52,24 @@ import { Target, TrendingUp } from "lucide-react"
 // }
 
 export function Profile() {
-  // TODO: Add state management and API call to fetch user profile from backend
-  // TODO: Get current user ID from auth context/session
+  const { user: authUser } = useAuth()
+  const { setProfileResume, hasResume } = useProfileResume()
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploaded, setUploaded] = useState(false)
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0])
+      setUploaded(false)
+    }
+  }
+
+  const handleUpload = () => {
+    if (selectedFile) {
+      setProfileResume(selectedFile)
+      setUploaded(true)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-purple-50">
@@ -77,38 +81,37 @@ export function Profile() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-6">
-                  {/* TODO: Display tier badge from profile.currentTier */}
-                  {/* TODO: Use RankBadge component: <RankBadge tier={mapTierToRankBadge(profile.currentTier)} size="lg" /> */}
-                  <RankBadge tier="Iron" size="lg" />
+                  <RankBadge tier={mapTierToRankBadge(authUser?.current_tier)} size="lg" />
                   <div>
-                    <CardTitle className="text-3xl text-black">Your Profile</CardTitle>
-                    {/* TODO: Display profile.currentTierName */}
-                    <CardDescription className="text-lg">Tier Name</CardDescription>
+                    <CardTitle className="text-3xl text-black">
+                      {authUser ? authUser.username : "Your Profile"}
+                    </CardTitle>
+                    <CardDescription className="text-lg">
+                      {authUser?.current_tier ?? "Tier"}
+                    </CardDescription>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-600">Overall Rank</p>
-                  {/* TODO: Display profile.overallRank */}
-                  <p className="text-3xl font-bold text-primary">#--</p>
+                  <p className="text-sm text-gray-600">MMR</p>
+                  <p className="text-3xl font-bold text-primary">
+                    {authUser?.mmr_score ?? "--"}
+                  </p>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid md:grid-cols-3 gap-6">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Average Match Score</p>
-                  {/* TODO: Display profile.matchScore */}
-                  <p className="text-4xl font-bold text-primary">--%</p>
+                  <p className="text-sm text-gray-600 mb-1">MMR Score</p>
+                  <p className="text-4xl font-bold text-primary">{authUser?.mmr_score ?? "--"}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Application Streak</p>
-                  {/* TODO: Display profile.streak */}
-                  <p className="text-4xl font-bold text-purple-600">--</p>
+                  <p className="text-sm text-gray-600 mb-1">Current Tier</p>
+                  <p className="text-4xl font-bold text-purple-600">{authUser?.current_tier ?? "--"}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Applications</p>
-                  {/* TODO: Display profile.totalApplications */}
-                  <p className="text-4xl font-bold text-black">--</p>
+                  <p className="text-sm text-gray-600 mb-1">Resume on file</p>
+                  <p className="text-4xl font-bold text-black">{hasResume ? "Yes" : "No"}</p>
                 </div>
               </div>
             </CardContent>
@@ -142,23 +145,75 @@ export function Profile() {
               </CardContent>
             </Card>
 
+            {/* Resume Upload – show for applicants and when not logged in (recruiters don't need it) */}
+            {authUser?.role !== "recruiter" && (
+              <Card className="border-purple-200">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <UploadIcon className="h-5 w-5 text-primary" />
+                    Your Resume
+                  </CardTitle>
+                  <CardDescription>
+                    Upload your PDF resume here. Use Quick Apply on job listings to share it instantly.
+                    {!authUser && " Log in as an applicant to save it for Quick Apply."}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="border-2 border-dashed border-purple-300 rounded-lg p-6 text-center hover:border-primary transition-colors">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handleFileChange}
+                      className="hidden"
+                      id="profile-resume-upload"
+                    />
+                    <label htmlFor="profile-resume-upload" className="cursor-pointer">
+                      {selectedFile ? (
+                        <div className="space-y-2">
+                          <FileText className="h-12 w-12 text-primary mx-auto" />
+                          <p className="text-sm font-medium text-black">{selectedFile.name}</p>
+                          <p className="text-xs text-gray-500">
+                            {(selectedFile.size / 1024).toFixed(2)} KB
+                          </p>
+                        </div>
+                      ) : hasResume ? (
+                        <div className="space-y-2">
+                          <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
+                          <p className="text-sm font-medium text-black">Resume on file</p>
+                          <p className="text-xs text-gray-500">Upload a new file to replace</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <UploadIcon className="h-12 w-12 text-gray-400 mx-auto" />
+                          <p className="text-sm text-gray-600">Click to upload or drag and drop</p>
+                          <p className="text-xs text-gray-500">PDF only, max 10MB</p>
+                        </div>
+                      )}
+                    </label>
+                  </div>
+                  <Button
+                    onClick={handleUpload}
+                    disabled={!selectedFile || uploaded}
+                    className="w-full bg-primary hover:bg-primary/90"
+                    size="lg"
+                  >
+                    {uploaded || hasResume ? (
+                      <>
+                        <CheckCircle2 className="h-5 w-5 mr-2" />
+                        {uploaded ? "Resume saved for Quick Apply" : "Resume on file"}
+                      </>
+                    ) : (
+                      <>
+                        <UploadIcon className="h-5 w-5 mr-2" />
+                        Upload Resume
+                      </>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Recent Matches */}
-            {/* TODO: Fetch recent matches from backend (GET /api/profile/recent-matches) */}
-            <Card className="border-purple-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Target className="h-5 w-5 text-primary" />
-                  Recent Matches
-                </CardTitle>
-                <CardDescription>Your latest job application results</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {/* TODO: Map over recentMatches array from backend */}
-                <div className="text-center py-8">
-                  <p className="text-gray-500">Recent matches will appear here</p>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
       </div>

@@ -1,29 +1,36 @@
 import { useState } from "react"
-import { Link, useLocation } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { Trophy, Briefcase, Upload, Home, User, Menu, X, LogIn } from "lucide-react"
+import { Trophy, Briefcase, Home, User, Menu, X, LogIn, FolderOpen, LogOut } from "lucide-react"
 import gauntletLogo from "@/assets/gauntlet.png"
+import { useAuth } from "@/contexts/AuthContext"
 
 export function Header() {
   const location = useLocation()
+  const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  
-  // TODO: Replace with actual auth check from backend/context
-  // Example: const { isAuthenticated } = useAuth()
-  const isAuthenticated = false // Placeholder - will be replaced with actual auth state
+  const { user, isAuthenticated, logout } = useAuth()
+
+  const handleLogout = () => {
+    logout()
+    setMobileMenuOpen(false)
+    navigate("/")
+  }
 
   const isActive = (path: string) => location.pathname === path
 
   const navItems = [
     { path: "/", label: "Home", icon: Home },
     { path: "/jobs", label: "Jobs", icon: Briefcase },
-    { path: "/upload", label: "Upload Resume", icon: Upload },
     { path: "/ladder", label: "Ladder", icon: Trophy },
   ]
 
-  // Add Profile or Login based on auth state
-  if (isAuthenticated) {
+  if (isAuthenticated && user) {
     navItems.push({ path: "/profile", label: "Profile", icon: User })
+    if (user.role === "recruiter") {
+      navItems.push({ path: "/my-jobs", label: "My Jobs", icon: FolderOpen })
+    }
+    navItems.push({ path: "/login", label: "Logout", icon: LogOut, isLogout: true })
   } else {
     navItems.push({ path: "/login", label: "Login", icon: LogIn })
   }
@@ -41,6 +48,22 @@ export function Header() {
           <nav className="hidden lg:flex items-center space-x-2 xl:space-x-4">
             {navItems.map((item) => {
               const Icon = item.icon
+              const isLogout = "isLogout" in item && item.isLogout
+              if (isLogout) {
+                return (
+                  <Button
+                    key="logout"
+                    variant="ghost"
+                    className="text-black"
+                    size="sm"
+                    onClick={handleLogout}
+                  >
+                    <Icon className="h-4 w-4 mr-2" />
+                    <span className="hidden xl:inline">{item.label}</span>
+                    <span className="xl:hidden">{item.label}</span>
+                  </Button>
+                )
+              }
               return (
                 <Link key={item.path} to={item.path}>
                   <Button
@@ -78,6 +101,20 @@ export function Header() {
             <div className="flex flex-col space-y-2">
               {navItems.map((item) => {
                 const Icon = item.icon
+                const isLogout = "isLogout" in item && item.isLogout
+                if (isLogout) {
+                  return (
+                    <Button
+                      key="logout"
+                      variant="ghost"
+                      className="w-full justify-start text-black"
+                      onClick={handleLogout}
+                    >
+                      <Icon className="h-4 w-4 mr-2" />
+                      {item.label}
+                    </Button>
+                  )
+                }
                 return (
                   <Link
                     key={item.path}

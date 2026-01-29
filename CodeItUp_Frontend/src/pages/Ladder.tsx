@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { RankBadge } from "@/components/RankBadge"
 import { Search, Trophy, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface UserRanking {
@@ -20,13 +20,20 @@ interface LeaderboardResponse {
   limit: number;
 }
 
-const tierColors: Record<string, string> = {
-  CEO: "bg-purple-600",
-  "Managing Director": "bg-blue-500",
-  "Senior Dev": "bg-teal-500",
-  "Junior Dev": "bg-yellow-500",
-  Intern: "bg-gray-400",
-  Barista: "bg-amber-600",
+function mapTierToRankBadge(tier?: string): "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger" {
+  const tierMap: Record<string, "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger"> = {
+    Barista: "Iron",
+    Intern: "Bronze",
+    "Junior Dev": "Silver",
+    "Senior Dev": "Gold",
+    "Managing Director": "Challenger",
+    CEO: "Challenger",
+  }
+  if (!tier) return "Iron"
+  if (["Iron", "Bronze", "Silver", "Gold", "Challenger"].includes(tier)) {
+    return tier as "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger"
+  }
+  return tierMap[tier] || "Iron"
 }
 
 export function Ladder() {
@@ -148,10 +155,9 @@ export function Ladder() {
                         <h3 className="font-bold text-lg sm:text-xl text-gray-900 group-hover:text-purple-700 transition-colors">
                           {user.username}
                         </h3>
-                        <div className="mt-1">
-                          <Badge className={`${tierColors[user.current_tier] || 'bg-gray-500'} hover:opacity-90 transition-opacity`}>
-                            {user.current_tier}
-                          </Badge>
+                        <div className="mt-1 flex items-center gap-2">
+                          <RankBadge tier={mapTierToRankBadge(user.current_tier)} size="sm" style="shield" />
+                          <span className="text-sm text-gray-600">{user.current_tier}</span>
                         </div>
                       </div>
                     </div>
