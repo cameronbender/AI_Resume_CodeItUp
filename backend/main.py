@@ -211,7 +211,7 @@ def apply_to_job(app_req: ApplicationRequest):
         # Create application. Isaac look here when connecting to AI 
         # Dumb mock analysis for now
         analysis = '{"strengths": ["Quick Apply"], "weaknesses": [], "ai_insult": "You used quick apply, lazy?"}'
-        match_score = 75.0 # Mock score
+        match_score = int(scoreResume(resume_data, job_description))
 
         cursor.execute("""
             INSERT INTO applications (user_id, job_id, match_score, analysis, resume_data, resume_filename)
