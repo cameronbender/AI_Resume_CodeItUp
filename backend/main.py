@@ -222,9 +222,20 @@ def apply_to_job(app_req: ApplicationRequest):
              raise HTTPException(status_code=400, detail="Resume required")
 
         # Create application. Isaac look here when connecting to AI 
-        # Dumb mock analysis for now
+        
+        # Get job description to score against
+        cursor.execute("SELECT description FROM jobs WHERE job_id = %s", (app_req.job_id,))
+        job_data = cursor.fetchone()
+        if not job_data:
+             raise HTTPException(status_code=404, detail="Job not found")
+        
+        try:
+            match_score = int(scoreResumePDF(resume_data, job_data['description']))
+        except Exception as e:
+            print(f"Scoring Error: {e}")
+            match_score = 75 # Fallback if AI fails
+
         analysis = '{"strengths": ["Quick Apply"], "weaknesses": [], "ai_insult": "You used quick apply, lazy?"}'
-        match_score = 75.0 # Mock score
 
         cursor.execute("""
             INSERT INTO applications (user_id, job_id, match_score, analysis, resume_data, resume_filename)
