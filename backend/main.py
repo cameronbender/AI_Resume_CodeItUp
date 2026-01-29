@@ -39,7 +39,7 @@ class UserSignup(BaseModel):
     role: str = "candidate"  # "candidate" or "recruiter"
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email_or_username: str
     password: str
 
 class UserResponse(BaseModel):
@@ -111,7 +111,9 @@ def login(user_credentials: UserLogin):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT * FROM users WHERE email = %s", (user_credentials.email,))
+        # Check against both email and username
+        cursor.execute("SELECT * FROM users WHERE email = %s OR username = %s", 
+                      (user_credentials.email_or_username, user_credentials.email_or_username))
         user = cursor.fetchone()
         
         if not user:
