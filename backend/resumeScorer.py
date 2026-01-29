@@ -90,7 +90,6 @@ def extract_score(text: str) -> int:
 
 
 def scoreResume(resume_data: str, job_description: str) -> int:
-    resume_data = pdfReader(resume_data)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": f"JOB DESCRIPTION:\n{job_description}"},
