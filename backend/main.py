@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, EmailStr
 from passlib.context import CryptContext
 from typing import Optional
-from resumeScorer import scoreResume
+from resumeScorer import scoreResumePDF
 
 # Load environment variables from parent directory
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
@@ -209,9 +209,20 @@ def apply_to_job(app_req: ApplicationRequest):
              raise HTTPException(status_code=400, detail="Resume required")
 
         # Create application. Isaac look here when connecting to AI 
+        # Get job description to score against
+        cursor.execute("SELECT description FROM jobs WHERE job_id = %s", (app_req.job_id,))
+        job_data = cursor.fetchone()
+        if not job_data:
+             raise HTTPException(status_code=404, detail="Job not found")
+        
+        try:
+            match_score = int(scoreResumePDF(resume_data, job_data['description']))
+        except Exception as e:
+            print(f"Scoring Error: {e}")
+            match_score = 75 # Fallback if AI fails
+        
         # Dumb mock analysis for now
         analysis = '{"strengths": ["Quick Apply"], "weaknesses": [], "ai_insult": "You used quick apply, lazy?"}'
-        match_score = int(scoreResume(resume_data, job_description))
 
         cursor.execute("""
             INSERT INTO applications (user_id, job_id, match_score, analysis, resume_data, resume_filename)
