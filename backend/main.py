@@ -1,7 +1,7 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from fastapi import FastAPI, HTTPException, status, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, status, File, UploadFile, Form, Header
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pydantic import BaseModel, EmailStr
@@ -274,6 +274,28 @@ def get_jobs(page: int = 1, limit: int = 20):
             "page": page,
             "limit": limit
         }
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/jobs/mine")
+def get_my_jobs(x_user_id: str = Header(None)):
+    if not x_user_id:
+        raise HTTPException(status_code=401, detail="Missing X-User-Id header")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT j.job_id, j.job_title, j.company_name, j.description, COUNT(a.app_id) as applicant_count
+            FROM jobs j
+            LEFT JOIN applications a ON j.job_id = a.job_id
+            WHERE j.owner_id = %s
+            GROUP BY j.job_id
+            ORDER BY j.created_at DESC
+        """, (x_user_id,))
+        jobs = cursor.fetchall()
+        return {"data": [dict(row) for row in jobs]}
     finally:
         cursor.close()
         conn.close()
