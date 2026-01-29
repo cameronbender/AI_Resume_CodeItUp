@@ -104,7 +104,7 @@ def signup(user: UserSignup):
     except psycopg2.Error as e:
         conn.rollback()
         print(f"Database Error: {e}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
         conn.close()
