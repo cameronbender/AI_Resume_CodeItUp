@@ -1,17 +1,78 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { LogIn, UserPlus } from "lucide-react"
+import { LogIn, UserPlus, Briefcase, User } from "lucide-react"
 
 export function Auth() {
+  const navigate = useNavigate()
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState("")
+  const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [role, setRole] = useState<"candidate" | "recruiter">("candidate")
 
-  // TODO: Add form submission handler when backend is connected
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+
+    // Basic Validation
+    if (!email || !password) {
+      setError("Please fill in all required fields")
+      setLoading(false)
+      return
+    }
+
+    if (!isLogin) {
+      if (password !== confirmPassword) {
+        setError("Passwords do not match")
+        setLoading(false)
+        return
+      }
+      if (!username) {
+        setError("Username is required")
+        setLoading(false)
+        return
+      }
+    }
+
+    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/signup"
+    const body = isLogin
+      ? { email, password }
+      : { email, password, username, role }
+
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Authentication failed")
+      }
+
+      // Save user info (INSECURE: FOR DEMO ONLY)
+      localStorage.setItem("user", JSON.stringify(data))
+
+      // Redirect
+      navigate(role === "recruiter" ? "/upload" : "/jobs")
+
+    } catch (err: any) {
+      console.error("Auth error:", err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-white to-purple-50 flex items-center justify-center py-12 px-4">
@@ -21,92 +82,113 @@ export function Auth() {
             {isLogin ? "Welcome Back" : "Create Account"}
           </CardTitle>
           <CardDescription>
-            {isLogin 
-              ? "Sign in to continue your journey up the ladder" 
+            {isLogin
+              ? "Sign in to continue your journey"
               : "Join the competition and start climbing"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {/* Toggle between Login and Signup */}
-          <div className="flex gap-2 mb-6">
+          <div className="flex gap-2 mb-6 bg-gray-100 p-1 rounded-lg">
             <Button
-              variant={isLogin ? "default" : "outline"}
-              className={`flex-1 ${isLogin ? "bg-primary" : "border-purple-300 text-purple-700"}`}
-              onClick={() => setIsLogin(true)}
+              variant={isLogin ? "default" : "ghost"}
+              className={`flex-1 ${isLogin ? "bg-white text-black shadow-sm" : "text-gray-500 hover:text-gray-900"}`}
+              onClick={() => { setIsLogin(true); setError(null); }}
             >
               <LogIn className="h-4 w-4 mr-2" />
               Login
             </Button>
             <Button
-              variant={!isLogin ? "default" : "outline"}
-              className={`flex-1 ${!isLogin ? "bg-primary" : "border-purple-300 text-purple-700"}`}
-              onClick={() => setIsLogin(false)}
+              variant={!isLogin ? "default" : "ghost"}
+              className={`flex-1 ${!isLogin ? "bg-white text-black shadow-sm" : "text-gray-500 hover:text-gray-900"}`}
+              onClick={() => { setIsLogin(false); setError(null); }}
             >
               <UserPlus className="h-4 w-4 mr-2" />
               Sign Up
             </Button>
           </div>
 
-          <form className="space-y-4">
+          {!isLogin && (
+            <div className="flex gap-4 mb-6">
+              <div
+                className={`flex-1 cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-2 transition-all ${role === 'candidate' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-200 hover:border-gray-300'}`}
+                onClick={() => setRole("candidate")}
+              >
+                <User className={`h-6 w-6 ${role === 'candidate' ? 'text-purple-600' : 'text-gray-400'}`} />
+                <span className="font-medium text-sm">Candidate</span>
+              </div>
+              <div
+                className={`flex-1 cursor-pointer border rounded-xl p-4 flex flex-col items-center gap-2 transition-all ${role === 'recruiter' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-gray-300'}`}
+                onClick={() => setRole("recruiter")}
+              >
+                <Briefcase className={`h-6 w-6 ${role === 'recruiter' ? 'text-blue-600' : 'text-gray-400'}`} />
+                <span className="font-medium text-sm">Recruiter</span>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {!isLogin && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                <Input
+                  type="text"
+                  placeholder="johndoe"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  disabled={loading}
+                />
+              </div>
+            )}
+
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <Input
-                id="email"
                 type="email"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <Input
-                id="password"
                 type="password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
               />
             </div>
 
             {!isLogin && (
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm Password
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
                 <Input
-                  id="confirmPassword"
                   type="password"
                   placeholder="••••••••"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={loading}
                 />
               </div>
             )}
 
-            {isLogin && (
-              <div className="text-right">
-                <button
-                  type="button"
-                  className="text-sm text-purple-600 hover:text-purple-700 hover:underline"
-                >
-                  Forgot password?
-                </button>
+            {error && (
+              <div className="text-red-500 text-sm font-medium text-center bg-red-50 p-2 rounded">
+                {error}
               </div>
             )}
 
             <Button
               type="submit"
-              className="w-full bg-primary hover:bg-primary/90"
+              className={`w-full ${role === 'recruiter' && !isLogin ? 'bg-blue-600 hover:bg-blue-700' : 'bg-black hover:bg-gray-800'}`}
               size="lg"
-              // TODO: Add onClick handler for form submission
+              disabled={loading}
             >
-              {isLogin ? "Sign In" : "Create Account"}
+              {loading ? "Processing..." : (isLogin ? "Sign In" : "Create Account")}
             </Button>
           </form>
 
