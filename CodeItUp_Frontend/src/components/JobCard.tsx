@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { parseJobDescription } from "./JobDescription"
-import { MapPin, DollarSign, Briefcase, ChevronRight } from "lucide-react"
+// import { parseJobDescription } from "./JobDescription"
+import { MapPin, Briefcase, ChevronRight } from "lucide-react"
 
 interface JobCardProps {
   jobId: string
@@ -14,19 +14,18 @@ interface JobCardProps {
   onClick: () => void
 }
 
-export function JobCard({ 
-  title, 
-  company, 
-  location, 
-  description, 
-  applicants, 
+export function JobCard({
+  title,
+  company,
+  location,
+  applicants,
   matchScore,
-  onClick 
+  onClick
 }: JobCardProps) {
-  const parsed = parseJobDescription(description)
-  
+  // const parsed = parseJobDescription(description)
+
   return (
-    <Card 
+    <Card
       className="border-purple-200 hover:shadow-lg transition-all cursor-pointer hover:border-primary"
       onClick={onClick}
     >
@@ -35,7 +34,7 @@ export function JobCard({
           <div className="flex-1 min-w-0">
             <div className="flex items-start gap-3 mb-2">
               <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-black truncate">{parsed.title || title}</h3>
+                <h3 className="text-lg font-semibold text-black truncate">{title}</h3>
                 {company && (
                   <p className="text-sm text-gray-600 truncate">{company}</p>
                 )}
@@ -46,29 +45,14 @@ export function JobCard({
                 </Badge>
               )}
             </div>
-            
+
             <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-              {parsed.salaryRange && (
-                <div className="flex items-center gap-1">
-                  <DollarSign className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{parsed.salaryRange}</span>
-                </div>
-              )}
+              {/* Client-side parsed fields removed to rely on DB data */}
               {location && (
                 <div className="flex items-center gap-1">
                   <MapPin className="h-4 w-4 flex-shrink-0" />
                   <span className="truncate">{location}</span>
                 </div>
-              )}
-              {parsed.track && (
-                <Badge variant="outline" className="border-purple-300 text-purple-700 text-xs">
-                  {parsed.track}
-                </Badge>
-              )}
-              {parsed.careerLevel && (
-                <Badge variant="outline" className="border-purple-300 text-purple-700 text-xs">
-                  {parsed.careerLevel}
-                </Badge>
               )}
               {applicants !== undefined && (
                 <div className="flex items-center gap-1">

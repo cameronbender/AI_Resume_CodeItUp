@@ -8,6 +8,7 @@ from pydantic import BaseModel, EmailStr
 import bcrypt
 from typing import Optional
 from resumeScorer import scoreResumePDF
+from jobParser import parse_job_file
 
 # Load environment variables from parent directory
 load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
@@ -43,6 +44,11 @@ class UserSignup(BaseModel):
     email: EmailStr
     password: str
     role: str = "candidate"  # "candidate" or "recruiter"
+
+class JobCreate(BaseModel):
+    title: str
+    company_name: str
+    description: str
 
 class UserLogin(BaseModel):
     email_or_username: str
@@ -272,6 +278,84 @@ def get_job_applicants(job_id: str, limit: int = 5):
         cursor.close()
         conn.close()
 
+@app.post("/api/jobs")
+def create_job(
+    title: str = Form(...),
+    company_name: str = Form(...),
+    description: str = Form(...),
+    file: UploadFile = File(None),
+    user_id: str = Header(None, alias="X-User-Id")
+):
+    if not user_id:
+         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify user is a recruiter
+        cursor.execute("SELECT role FROM users WHERE user_id = %s", (user_id,))
+        user_role = cursor.fetchone()
+        
+        if not user_role or user_role['role'] != 'recruiter':
+            raise HTTPException(status_code=403, detail="Only recruiters can post jobs")
+
+        # Handle file upload if present
+        source_file_name = None
+        source_file_data = None
+        if file:
+            source_file_name = file.filename
+            source_file_data = file.file.read()
+
+        cursor.execute("""
+            INSERT INTO jobs (job_title, company_name, description, owner_id, source_file, source_file_data)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING job_id, job_title, company_name, description, created_at, source_file
+        """, (title, company_name, description, user_id, source_file_name, source_file_data))
+        
+        new_job = cursor.fetchone()
+        conn.commit()
+        return {"message": "Job created successfully", "data": new_job}
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Error creating job: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.delete("/api/jobs/{job_id}")
+def delete_job(job_id: str, user_id: str = Header(None, alias="X-User-Id")):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify ownership
+        cursor.execute("SELECT owner_id FROM jobs WHERE job_id = %s", (job_id,))
+        job = cursor.fetchone()
+        
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+            
+        if str(job['owner_id']) != user_id:
+             raise HTTPException(status_code=403, detail="You can only delete your own jobs")
+
+        # Delete job
+        cursor.execute("DELETE FROM jobs WHERE job_id = %s", (job_id,))
+        conn.commit()
+        
+        return {"message": "Job deleted successfully"}
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Database Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        cursor.close()
+        conn.close()
+
 @app.get("/api/jobs")
 def get_jobs(page: int = 1, limit: int = 20):
     conn = get_db_connection()
@@ -284,10 +368,13 @@ def get_jobs(page: int = 1, limit: int = 20):
 
         # Get paginated data
         cursor.execute("""
-            SELECT job_id, company_name, job_title, description, weights, is_active, source_file, owner_id, created_at 
-            FROM jobs 
-            WHERE is_active = TRUE 
-            ORDER BY created_at DESC
+            SELECT j.job_id, j.company_name, j.job_title, j.description, j.weights, j.is_active, j.source_file, j.owner_id, j.created_at,
+                   COUNT(a.app_id) as applicant_count
+            FROM jobs j
+            LEFT JOIN applications a ON j.job_id = a.job_id
+            WHERE j.is_active = TRUE 
+            GROUP BY j.job_id
+            ORDER BY j.created_at DESC
             LIMIT %s OFFSET %s
         """, (limit, offset))
         jobs = cursor.fetchall()
@@ -376,6 +463,19 @@ def get_user(username: str):
     finally:
         cursor.close()
         conn.close()
+
+@app.post("/api/jobs/parse")
+async def parse_job_file_endpoint(file: UploadFile = File(...), user_id: str = Header(None, alias="X-User-Id")):
+    if not user_id:
+         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        content = await file.read()
+        parsed_data = parse_job_file(content, file.filename)
+        return {"data": parsed_data}
+    except Exception as e:
+        print(f"Parsing error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to parse job file")
 
 if __name__ == "__main__":
     import uvicorn

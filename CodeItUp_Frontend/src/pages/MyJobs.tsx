@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/AuthContext"
-import { FolderOpen, Briefcase, ChevronRight, Users } from "lucide-react"
+import { FolderOpen, Briefcase, ChevronRight, Users, Plus, Trash2 } from "lucide-react"
 
 interface Job {
   job_id: string
@@ -64,7 +66,118 @@ export function MyJobs() {
           )
         )
       })
-      .catch(() => {})
+      .catch(() => { })
+  }
+
+  // Job Creation State
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [newJob, setNewJob] = useState({ title: "", company: "", description: "" })
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleCreateJob = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newJob.title || !newJob.company || !newJob.description) return
+
+    setCreateLoading(true)
+    try {
+      const formData = new FormData()
+      formData.append("title", newJob.title)
+      formData.append("company_name", newJob.company)
+      formData.append("description", newJob.description)
+      if (selectedFile) {
+        formData.append("file", selectedFile)
+      }
+
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: {
+          "X-User-Id": user?.user_id || ""
+        },
+        body: formData
+      })
+
+      if (!res.ok) throw new Error("Failed to create job")
+
+      const data = await res.json()
+
+      // Add new job to list immediately
+      setJobs(prev => [{
+        job_id: data.data.job_id,
+        job_title: data.data.job_title,
+        company_name: data.data.company_name,
+        description: data.data.description,
+        applicant_count: 0,
+        applicants: []
+      }, ...prev])
+
+      setIsCreateOpen(false)
+      setNewJob({ title: "", company: "", description: "" })
+      setSelectedFile(null)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files ? e.target.files[0] : null
+    setSelectedFile(file)
+
+    if (file) {
+      // Auto-parse
+      const formData = new FormData()
+      formData.append("file", file)
+
+      // Add toast at some point in the future
+      setCreateLoading(true)
+      try {
+        const res = await fetch("/api/jobs/parse", {
+          method: "POST",
+          headers: { "X-User-Id": user?.user_id || "" },
+          body: formData
+        })
+        if (res.ok) {
+          const data = await res.json()
+          if (data.data) {
+            setNewJob(prev => ({
+              ...prev,
+              title: data.data.title || prev.title,
+              company: data.data.company_name || prev.company,
+              description: data.data.description || prev.description
+            }))
+          }
+        }
+      } catch (err) {
+        console.error("Autofill failed", err)
+      } finally {
+        setCreateLoading(false)
+      }
+    }
+  }
+
+  const handleDeleteJob = async (e: React.MouseEvent, jobId: string) => {
+    e.stopPropagation() // Prevent card expansion
+    if (!confirm("Are you sure you want to delete this job? This action cannot be undone.")) return
+
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: "DELETE",
+        headers: { "X-User-Id": user?.user_id || "" }
+      })
+
+      if (res.ok) {
+        setJobs(prev => prev.filter(j => j.job_id !== jobId))
+      } else {
+        const data = await res.json()
+        alert(data.detail || "Failed to delete job")
+      }
+    } catch (err) {
+      console.error("Delete failed", err)
+      alert("Failed to delete job")
+    }
   }
 
   if (!isAuthenticated) return null
@@ -80,6 +193,88 @@ export function MyJobs() {
             <h1 className="text-4xl font-bold text-black">My Job Listings</h1>
             <p className="text-gray-600">Jobs you posted and their applicants</p>
           </div>
+        </div>
+
+        <div className="flex justify-end mb-6">
+          <Button
+            className="bg-purple-600 hover:bg-purple-700"
+            onClick={() => setIsCreateOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" /> Post New Job
+          </Button>
+
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Post a New Job</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreateJob} className="space-y-4 mt-4">
+                <div className="bg-transparent">
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept=".pdf,.txt,.doc,.docx"
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="gap-2"
+                    >
+                      <FolderOpen className="h-4 w-4" />
+                      Autofill from File
+                    </Button>
+                    {selectedFile && (
+                      <span className="text-sm text-gray-600 truncate max-w-[200px]">
+                        {selectedFile.name}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+                  <Input
+                    value={newJob.title}
+                    onChange={(e) => setNewJob({ ...newJob, title: e.target.value })}
+                    placeholder="e.g. Senior React Developer"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+                  <Input
+                    value={newJob.company}
+                    onChange={(e) => setNewJob({ ...newJob, company: e.target.value })}
+                    placeholder="e.g. TechCorp Inc."
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Job Description</label>
+                  <textarea
+                    className="w-full min-h-[150px] p-3 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    value={newJob.description}
+                    onChange={(e) => setNewJob({ ...newJob, description: e.target.value })}
+                    placeholder="Describe the role, requirements, and benefits..."
+                    required
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-4">
+                  <Button type="button" variant="ghost" onClick={() => setIsCreateOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={createLoading} className="bg-purple-600 hover:bg-purple-700">
+                    {createLoading ? "Creating..." : "Create Job"}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {error && (
@@ -117,6 +312,14 @@ export function MyJobs() {
                           {job.applicant_count} applicants
                         </span>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={(e) => handleDeleteJob(e, job.job_id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                       <ChevronRight
                         className={`h-5 w-5 transition-transform ${expandedJobId === job.job_id ? "rotate-90" : ""}`}
                       />

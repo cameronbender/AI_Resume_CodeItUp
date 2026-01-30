@@ -11,7 +11,7 @@ interface Job {
   company_name: string;
   description: string;
   match_score?: number;
-  applicants?: number;
+  applicant_count?: number;
   location?: string;
 }
 
@@ -63,7 +63,6 @@ export function Jobs() {
   }, [page, limit]);
 
   // Client-side filtering for the current page
-  // Note: For full dataset search, backend search implementation is required.
   const filteredJobs = jobs.filter(job =>
     job.job_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     job.company_name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -121,7 +120,7 @@ export function Jobs() {
                   company={job.company_name}
                   location={job.location || "Remote"}
                   description={job.description}
-                  applicants={job.applicants || Math.floor(Math.random() * 50) + 1}
+                  applicants={job.applicant_count || 0}
                   onClick={() => setSelectedJob({
                     jobId: job.job_id,
                     title: job.job_title,
