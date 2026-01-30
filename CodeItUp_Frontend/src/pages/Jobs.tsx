@@ -44,7 +44,14 @@ export function Jobs() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/jobs?page=${page}&limit=${limit}`)
+
+    let url = `/api/jobs?page=${page}&limit=${limit}`;
+
+    if (searchTerm.trim() !== "") {
+      url += `&search=${encodeURIComponent(searchTerm)}`;
+    }
+
+    fetch(url)
       .then(res => {
         if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
         return res.json();
@@ -60,13 +67,13 @@ export function Jobs() {
         setError(err.message);
         setLoading(false);
       });
-  }, [page, limit]);
+  }, [page, limit, searchTerm]);
 
   // Client-side filtering for the current page
-  const filteredJobs = jobs.filter(job =>
-    job.job_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    job.company_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  //const filteredJobs = jobs.filter(job =>
+    //job.job_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    //job.company_name.toLowerCase().includes(searchTerm.toLowerCase())
+  //);
 
   const handlePreviousPage = () => {
     if (page > 1) setPage(page - 1);
@@ -90,10 +97,13 @@ export function Jobs() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <Input
               type="text"
-              placeholder="Search jobs on this page..."
+              placeholder="Search all jobs..."
+              className="pl-12"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
             />
           </div>
         </div>
@@ -112,7 +122,7 @@ export function Jobs() {
         ) : (
           <div className="space-y-6">
             <div className="space-y-4">
-              {filteredJobs.map((job) => (
+              {jobs.map((job) => (
                 <JobCard
                   key={job.job_id}
                   jobId={job.job_id}
@@ -131,7 +141,7 @@ export function Jobs() {
                 />
               ))}
 
-              {!error && filteredJobs.length === 0 && (
+              {!error && jobs.length === 0 && (
                 <p className="text-center text-gray-500">No jobs found on this page.</p>
               )}
             </div>

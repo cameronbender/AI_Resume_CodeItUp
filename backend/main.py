@@ -415,34 +415,57 @@ def delete_job(job_id: str, user_id: str = Header(None, alias="X-User-Id")):
         conn.close()
 
 @app.get("/api/jobs")
-def get_jobs(page: int = 1, limit: int = 20):
+def get_jobs(page: int = 1, limit: int = 20, search: str = None):
     conn = get_db_connection()
     cursor = conn.cursor()
+
     offset = (page - 1) * limit
+
     try:
-        # Get total count
-        cursor.execute("SELECT count(*) FROM jobs WHERE is_active = TRUE")
-        total = cursor.fetchone()['count']
+        where_clauses = ["j.is_active = TRUE"]
+        params = []
+
+        if search and search.strip() != "":
+            where_clauses.append("(j.job_title ILIKE %s OR j.company_name ILIKE %s)")
+            params.append(f"%{search}%")
+            params.append(f"%{search}%")
+
+        where_sql = " AND ".join(where_clauses)
+
+        #Get total count
+        count_query = f"""
+            SELECT COUNT(*) 
+            FROM jobs j
+            WHERE {where_sql}
+        """
+
+        cursor.execute(count_query, tuple(params))
+        total = cursor.fetchone()["count"]
 
         # Get paginated data
-        cursor.execute("""
+        data_query = f"""
             SELECT j.job_id, j.company_name, j.job_title, j.description, j.weights, j.is_active, j.source_file, j.owner_id, j.created_at,
                    COUNT(a.app_id) as applicant_count
             FROM jobs j
             LEFT JOIN applications a ON j.job_id = a.job_id
-            WHERE j.is_active = TRUE 
+            WHERE {where_sql}
             GROUP BY j.job_id
             ORDER BY j.created_at DESC
             LIMIT %s OFFSET %s
-        """, (limit, offset))
+        """
+
+        params_with_paging = params + [limit, offset]
+
+        cursor.execute(data_query, tuple(params_with_paging))
         jobs = cursor.fetchall()
-        
+
         return {
             "data": [dict(row) for row in jobs],
             "total": total,
             "page": page,
             "limit": limit
         }
+
     finally:
         cursor.close()
         conn.close()
