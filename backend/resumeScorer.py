@@ -58,8 +58,22 @@ OUTPUT FORMAT (STRICT)
 
 <number>
 
-No explanation. No commentary.
-Only output the numeric score.
+STRENGTHS:
+- Basic programming knowledge in Python and Java
+- Completed relevant coursework in software development
+- Shows willingness to learn through personal projects
+
+WEAKNESSES:
+- Skills listed do not fully match job requirements (missing web frameworks and database experience)
+- No professional development experience
+- Projects are described vaguely with no technical depth
+- No measurable outcomes or results provided
+
+SCORING EXPLANATION:
+The candidate demonstrates foundational programming knowledge but lacks direct experience with the technologies required for this role. While educational background is relevant, there is limited practical application shown. The resume would be stronger with clearer project descriptions and demonstrated technical impact.
+
+
+The first line should be a single integer score between 0 and 100. Adhere strictly to this format.
 """
 
 
@@ -74,7 +88,7 @@ def pdfReader(file_bytes: bytes) -> str:
 
     return text.strip()
 
-def scoreResumePDF(pdf_bytes: bytes, job_description: str) -> int:
+def scoreResumePDF(pdf_bytes: bytes, job_description: str):
     resume_text = pdfReader(pdf_bytes)
 
     if not resume_text or len(resume_text.strip()) < 30:
@@ -82,14 +96,14 @@ def scoreResumePDF(pdf_bytes: bytes, job_description: str) -> int:
 
     return scoreResume(resume_text, job_description)
 
-def extract_score(text: str) -> int:
+def extract_score(text: str):
     match = re.search(r"\b(100|[0-9]{1,2})\b", text)
     if not match:
         raise ValueError(f"Could not extract score from model output: {text}")
-    return int(match.group(0))
+    return str(match.group(0))
 
 
-def scoreResume(resume_data: str, job_description: str) -> int:
+def scoreResume(resume_data: str, job_description: str):
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": f"JOB DESCRIPTION:\n{job_description}"},
@@ -101,5 +115,4 @@ def scoreResume(resume_data: str, job_description: str) -> int:
         messages=messages,
     )
 
-    raw_output = completion.choices[0].message.content.strip()
-    return extract_score(raw_output)
+    return completion.choices[0].message.content.strip()

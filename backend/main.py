@@ -1,4 +1,5 @@
 import os
+import json
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from fastapi import FastAPI, HTTPException, status, File, UploadFile, Form, Header
@@ -266,6 +267,24 @@ def apply_to_job(app_req: ApplicationRequest):
              raise HTTPException(status_code=400, detail="Resume required")
 
         # Create application. Isaac look here when connecting to AI 
+        def parse_ai_output(response_text: str):
+            lines = response_text.strip().split("\n")
+
+            # First line is just the finalscore
+            final_score = int(lines[0].strip())
+
+            # Everything else is the analysis
+            analysis_text = "\n".join(lines[1:]).strip()
+            
+            return final_score, analysis_text
+        
+        def build_analysis_json(analysis_text):
+            if not analysis_text:
+                return json.dumps({"analysis": "No analysis generated"})
+    
+            return json.dumps({
+                "analysis": analysis_text
+            })
         # Get job description to score against
         cursor.execute("SELECT description FROM jobs WHERE job_id = %s", (app_req.job_id,))
         job_data = cursor.fetchone()
@@ -273,12 +292,13 @@ def apply_to_job(app_req: ApplicationRequest):
              raise HTTPException(status_code=404, detail="Job not found")
         
         try:
-            match_score = int(scoreResumePDF(resume_data, job_data['description']))
+            match_score, analysis_text = parse_ai_output(scoreResumePDF(resume_data, job_data['description']))
+            analysis = build_analysis_json(analysis_text) 
         except Exception as e:
             print(f"Scoring Error: {e}")
             match_score = 75 # Fallback if AI fails
 
-        analysis = '{"strengths": ["Quick Apply"], "weaknesses": [], "ai_insult": "You used quick apply, lazy?"}'
+        #analysis = '{"strengths": ["Quick Apply"], "weaknesses": [], "ai_insult": "You used quick apply, lazy?"}'
 
         cursor.execute("""
             INSERT INTO applications (user_id, job_id, match_score, analysis, resume_data, resume_filename)
