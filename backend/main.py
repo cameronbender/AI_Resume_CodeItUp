@@ -61,6 +61,7 @@ class UserResponse(BaseModel):
     role: str
     mmr_score: int
     current_tier: str
+    streak_count: int = 0
     has_resume: bool = False
 
 def get_db_connection():
@@ -117,6 +118,7 @@ def signup(user: UserSignup):
             "role": new_user["role"],
             "mmr_score": new_user["mmr_score"],
             "current_tier": new_user["current_tier"],
+            "streak_count": new_user.get("streak_count", 0),
             "has_resume": bool(new_user["has_resume"]),
         }
         
@@ -160,9 +162,45 @@ def login(user_credentials: UserLogin):
             "role": user['role'],
             "mmr_score": user['mmr_score'],
             "current_tier": user['current_tier'],
+            "streak_count": user['streak_count'],
             "has_resume": user['has_resume']
         }
         
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/auth/me", response_model=UserResponse)
+def get_current_user(user_id: str = Header(None, alias="X-User-Id")):
+    if not user_id:
+         raise HTTPException(status_code=401, detail="Missing Authentication Header")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT *, (resume_data IS NOT NULL) as has_resume 
+            FROM users 
+            WHERE user_id = %s
+        """, (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        return {
+            "user_id": str(user['user_id']),
+            "username": user['username'],
+            "email": user['email'],
+            "role": user['role'],
+            "mmr_score": user['mmr_score'],
+            "current_tier": user['current_tier'],
+            "streak_count": user['streak_count'],
+            "has_resume": user['has_resume']
+        }
+    except psycopg2.Error as e:
+        print(f"Database Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
     finally:
         cursor.close()
         conn.close()

@@ -87,13 +87,13 @@ CREATE OR REPLACE FUNCTION update_user_rank() RETURNS TRIGGER AS $$ BEGIN -- Upd
 UPDATE users
 SET -- Streak Logic: If match match_score > 80, increment streak, else reset
     streak_count = CASE
-        WHEN NEW.match_score > 80 THEN streak_count + 1
+        WHEN NEW.match_score > 65 THEN streak_count + 1
         ELSE 0
     END,
     -- MMR Logic: Add match_score + (streak * 10) bonus
     mmr_score = mmr_score + (NEW.match_score)::INT + (
         CASE
-            WHEN NEW.match_score > 80 THEN (streak_count + 1) * 10
+            WHEN NEW.match_score > 65 THEN (streak_count + 1) * 10
             ELSE 0
         END
     ),
@@ -102,7 +102,7 @@ SET -- Streak Logic: If match match_score > 80, increment streak, else reset
         WHEN (
             mmr_score + (NEW.match_score)::INT + (
                 CASE
-                    WHEN NEW.match_score > 80 THEN (streak_count + 1) * 10
+                    WHEN NEW.match_score > 65 THEN (streak_count + 1) * 10
                     ELSE 0
                 END
             )
@@ -110,7 +110,7 @@ SET -- Streak Logic: If match match_score > 80, increment streak, else reset
         WHEN (
             mmr_score + (NEW.match_score)::INT + (
                 CASE
-                    WHEN NEW.match_score > 80 THEN (streak_count + 1) * 10
+                    WHEN NEW.match_score > 65 THEN (streak_count + 1) * 10
                     ELSE 0
                 END
             )
@@ -118,7 +118,7 @@ SET -- Streak Logic: If match match_score > 80, increment streak, else reset
         WHEN (
             mmr_score + (NEW.match_score)::INT + (
                 CASE
-                    WHEN NEW.match_score > 80 THEN (streak_count + 1) * 10
+                    WHEN NEW.match_score > 65 THEN (streak_count + 1) * 10
                     ELSE 0
                 END
             )
@@ -126,7 +126,7 @@ SET -- Streak Logic: If match match_score > 80, increment streak, else reset
         WHEN (
             mmr_score + (NEW.match_score)::INT + (
                 CASE
-                    WHEN NEW.match_score > 80 THEN (streak_count + 1) * 10
+                    WHEN NEW.match_score > 65 THEN (streak_count + 1) * 10
                     ELSE 0
                 END
             )
@@ -134,7 +134,7 @@ SET -- Streak Logic: If match match_score > 80, increment streak, else reset
         WHEN (
             mmr_score + (NEW.match_score)::INT + (
                 CASE
-                    WHEN NEW.match_score > 80 THEN (streak_count + 1) * 10
+                    WHEN NEW.match_score > 65 THEN (streak_count + 1) * 10
                     ELSE 0
                 END
             )
