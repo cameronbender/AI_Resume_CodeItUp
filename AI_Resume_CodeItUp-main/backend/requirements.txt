@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+psycopg2-binary
+python-dotenv
+bcrypt>=4.0,<5
+email-validator
+pydantic
+python-multipart
+pdfplumber
+openai
+

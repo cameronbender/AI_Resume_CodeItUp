@@ -1,0 +1,564 @@
+import os
+import json
+import psycopg2
+from psycopg2.extras import RealDictCursor
+from fastapi import FastAPI, HTTPException, status, File, UploadFile, Form, Header
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from pydantic import BaseModel, EmailStr
+import bcrypt
+from typing import Optional
+from resumeScorer import scoreResumePDF
+from jobParser import parse_job_file
+
+# Load environment variables from parent directory
+load_dotenv(os.path.join(os.path.dirname(__file__), '../.env'))
+
+app = FastAPI()
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # The frontend URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Password Hashing (bcrypt has a 72-byte limit; we truncate for consistency)
+BCRYPT_MAX_PASSWORD_BYTES = 72
+
+def _password_bytes(password: str) -> bytes:
+    return password.encode("utf-8")[:BCRYPT_MAX_PASSWORD_BYTES]
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if isinstance(hashed_password, bytes):
+        hashed_password = hashed_password.decode("utf-8")
+    return bcrypt.checkpw(_password_bytes(plain_password), hashed_password.encode("utf-8"))
+
+def get_password_hash(password: str) -> str:
+    return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt()).decode("utf-8")
+
+# Pydantic Models
+class UserSignup(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    role: str = "candidate"  # "candidate" or "recruiter"
+
+class JobCreate(BaseModel):
+    title: str
+    company_name: str
+    description: str
+
+class UserLogin(BaseModel):
+    email_or_username: str
+    password: str
+
+class UserResponse(BaseModel):
+    user_id: str
+    username: str
+    email: str
+    role: str
+    mmr_score: int
+    current_tier: str
+    streak_count: int = 0
+    has_resume: bool = False
+
+def get_db_connection():
+    try:
+        conn = psycopg2.connect(
+            user=os.getenv('PGUSER'),
+            password=os.getenv('PGPASSWORD'),
+            host=os.getenv('PGHOST'),
+            port=os.getenv('PGPORT'),
+            database=os.getenv('PGDATABASE'),
+            cursor_factory=RealDictCursor
+        )
+        return conn
+    except Exception as e:
+        print(f"Database connection error: {e}")
+        raise HTTPException(status_code=500, detail="Database connection failed")
+
+@app.get("/")
+def read_root():
+    return {"message": "Gauntlet.io API is running"}
+
+# Auth Endpoints
+@app.post("/api/auth/signup", response_model=UserResponse)
+def signup(user: UserSignup):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Check if user exists
+        cursor.execute("SELECT * FROM users WHERE email = %s OR username = %s", (user.email, user.username))
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username or Email already registered"
+            )
+        
+        # Hash password
+        hashed_password = get_password_hash(user.password)
+        
+        # Create user
+        cursor.execute("""
+            INSERT INTO users (username, email, password_hash, role)
+            VALUES (%s, %s, %s, %s)
+            RETURNING user_id, username, email, role, mmr_score, current_tier, streak_count,
+                      (resume_data IS NOT NULL) as has_resume
+        """, (user.username, user.email, hashed_password, user.role))
+        
+        new_user = cursor.fetchone()
+        conn.commit()
+        # Ensure types for JSON (user_id as str, has_resume as bool)
+        return {
+            "user_id": str(new_user["user_id"]),
+            "username": new_user["username"],
+            "email": new_user["email"],
+            "role": new_user["role"],
+            "mmr_score": new_user["mmr_score"],
+            "current_tier": new_user["current_tier"],
+            "streak_count": new_user.get("streak_count", 0),
+            "has_resume": bool(new_user["has_resume"]),
+        }
+        
+    except psycopg2.Error as e:
+        conn.rollback()
+        print(f"Database Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.post("/api/auth/login", response_model=UserResponse)
+def login(user_credentials: UserLogin):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Check against both email and username
+        cursor.execute("""
+            SELECT *, (resume_data IS NOT NULL) as has_resume 
+            FROM users 
+            WHERE email = %s OR username = %s
+        """, (user_credentials.email_or_username, user_credentials.email_or_username))
+        user = cursor.fetchone()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Credentials"
+            )
+            
+        if not verify_password(user_credentials.password, user['password_hash']):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid Credentials"
+            )
+            
+        return {
+            "user_id": str(user['user_id']),
+            "username": user['username'],
+            "email": user['email'],
+            "role": user['role'],
+            "mmr_score": user['mmr_score'],
+            "current_tier": user['current_tier'],
+            "streak_count": user['streak_count'],
+            "has_resume": user['has_resume']
+        }
+        
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/auth/me", response_model=UserResponse)
+def get_current_user(user_id: str = Header(None, alias="X-User-Id")):
+    if not user_id:
+         raise HTTPException(status_code=401, detail="Missing Authentication Header")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT *, (resume_data IS NOT NULL) as has_resume 
+            FROM users 
+            WHERE user_id = %s
+        """, (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        return {
+            "user_id": str(user['user_id']),
+            "username": user['username'],
+            "email": user['email'],
+            "role": user['role'],
+            "mmr_score": user['mmr_score'],
+            "current_tier": user['current_tier'],
+            "streak_count": user['streak_count'],
+            "has_resume": user['has_resume']
+        }
+    except psycopg2.Error as e:
+        print(f"Database Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        cursor.close()
+        conn.close()
+
+# Resume & Application Endpoints
+
+@app.post("/api/user/resume")
+async def upload_resume(user_id: str = Form(...), file: UploadFile = File(...)):
+    if file.content_type != "application/pdf":
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+    
+    file_content = await file.read()
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE users 
+            SET resume_data = %s, resume_filename = %s 
+            WHERE user_id = %s
+        """, (file_content, file.filename, user_id))
+        
+        conn.commit()
+        return {"message": "Resume uploaded successfully", "filename": file.filename}
+    except psycopg2.Error as e:
+        conn.rollback()
+        print(f"Database Error: {e}")
+        raise HTTPException(status_code=500, detail="Database Error")
+    finally:
+        cursor.close()
+        conn.close()
+
+class ApplicationRequest(BaseModel):
+    user_id: str
+    job_id: str
+    use_profile_resume: bool = False
+
+@app.post("/api/applications")
+def apply_to_job(app_req: ApplicationRequest):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Check if already applied
+        cursor.execute("SELECT * FROM applications WHERE user_id = %s AND job_id = %s", 
+                      (app_req.user_id, app_req.job_id))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="You have already applied to this job")
+
+        resume_data = None
+        resume_filename = None
+
+        if app_req.use_profile_resume:
+            # Fetch resume from profile
+            cursor.execute("SELECT resume_data, resume_filename FROM users WHERE user_id = %s", (app_req.user_id,))
+            user = cursor.fetchone()
+            if not user or not user['resume_data']:
+                raise HTTPException(status_code=400, detail="No resume found on profile")
+            resume_data = user['resume_data']
+            resume_filename = user['resume_filename']
+        else:
+            # TODO: Handle one-off uploads if we implement that later
+            # For now, if not using profile resume, we assume it's coming from elsewhere or invalid
+             raise HTTPException(status_code=400, detail="Resume required")
+
+        # Create application. Isaac look here when connecting to AI 
+        def parse_ai_output(response_text: str):
+            lines = response_text.strip().split("\n")
+
+            # First line is just the finalscore
+            final_score = int(lines[0].strip())
+
+            # Everything else is the analysis
+            analysis_text = "\n".join(lines[1:]).strip()
+            
+            return final_score, analysis_text
+        
+        def build_analysis_json(analysis_text):
+            if not analysis_text:
+                return json.dumps({"analysis": "No analysis generated"})
+    
+            return json.dumps({
+                "analysis": analysis_text
+            })
+        # Get job description to score against
+        cursor.execute("SELECT description FROM jobs WHERE job_id = %s", (app_req.job_id,))
+        job_data = cursor.fetchone()
+        if not job_data:
+             raise HTTPException(status_code=404, detail="Job not found")
+        
+        try:
+            match_score, analysis_text = parse_ai_output(scoreResumePDF(resume_data, job_data['description']))
+            analysis = build_analysis_json(analysis_text) 
+        except Exception as e:
+            print(f"Scoring Error: {e}")
+            match_score = 75 # Fallback if AI fails
+
+        #analysis = '{"strengths": ["Quick Apply"], "weaknesses": [], "ai_insult": "You used quick apply, lazy?"}'
+
+        cursor.execute("""
+            INSERT INTO applications (user_id, job_id, match_score, analysis, resume_data, resume_filename)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (app_req.user_id, app_req.job_id, match_score, analysis, resume_data, resume_filename))
+        
+        conn.commit()
+        return {"message": "Application submitted successfully", "match_score": match_score}
+
+    except psycopg2.Error as e:
+        conn.rollback()
+        print(f"Database Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/jobs/{job_id}/applicants")
+def get_job_applicants(job_id: str, limit: int = 5):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT u.username, a.match_score, u.current_tier, a.analysis
+            FROM applications a
+            JOIN users u ON a.user_id = u.user_id
+            WHERE a.job_id = %s
+            ORDER BY a.match_score DESC
+            LIMIT %s
+        """, (job_id, limit))
+        applicants = cursor.fetchall()
+        
+        return {"data": [dict(row) for row in applicants]}
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.post("/api/jobs")
+def create_job(
+    title: str = Form(...),
+    company_name: str = Form(...),
+    description: str = Form(...),
+    file: UploadFile = File(None),
+    user_id: str = Header(None, alias="X-User-Id")
+):
+    if not user_id:
+         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify user is a recruiter
+        cursor.execute("SELECT role FROM users WHERE user_id = %s", (user_id,))
+        user_role = cursor.fetchone()
+        
+        if not user_role or user_role['role'] != 'recruiter':
+            raise HTTPException(status_code=403, detail="Only recruiters can post jobs")
+
+        # Handle file upload if present
+        source_file_name = None
+        source_file_data = None
+        if file:
+            source_file_name = file.filename
+            source_file_data = file.file.read()
+
+        cursor.execute("""
+            INSERT INTO jobs (job_title, company_name, description, owner_id, source_file, source_file_data)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING job_id, job_title, company_name, description, created_at, source_file
+        """, (title, company_name, description, user_id, source_file_name, source_file_data))
+        
+        new_job = cursor.fetchone()
+        conn.commit()
+        return {"message": "Job created successfully", "data": new_job}
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Error creating job: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.delete("/api/jobs/{job_id}")
+def delete_job(job_id: str, user_id: str = Header(None, alias="X-User-Id")):
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Verify ownership
+        cursor.execute("SELECT owner_id FROM jobs WHERE job_id = %s", (job_id,))
+        job = cursor.fetchone()
+        
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+            
+        if str(job['owner_id']) != user_id:
+             raise HTTPException(status_code=403, detail="You can only delete your own jobs")
+
+        # Delete job
+        cursor.execute("DELETE FROM jobs WHERE job_id = %s", (job_id,))
+        conn.commit()
+        
+        return {"message": "Job deleted successfully"}
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Database Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/jobs")
+def get_jobs(page: int = 1, limit: int = 20, search: str = None):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    offset = (page - 1) * limit
+
+    try:
+        where_clauses = ["j.is_active = TRUE"]
+        params = []
+
+        if search and search.strip() != "":
+            where_clauses.append("(j.job_title ILIKE %s OR j.company_name ILIKE %s)")
+            params.append(f"%{search}%")
+            params.append(f"%{search}%")
+
+        where_sql = " AND ".join(where_clauses)
+
+        #Get total count
+        count_query = f"""
+            SELECT COUNT(*) 
+            FROM jobs j
+            WHERE {where_sql}
+        """
+
+        cursor.execute(count_query, tuple(params))
+        total = cursor.fetchone()["count"]
+
+        # Get paginated data
+        data_query = f"""
+            SELECT j.job_id, j.company_name, j.job_title, j.description, j.weights, j.is_active, j.source_file, j.owner_id, j.created_at,
+                   COUNT(a.app_id) as applicant_count
+            FROM jobs j
+            LEFT JOIN applications a ON j.job_id = a.job_id
+            WHERE {where_sql}
+            GROUP BY j.job_id
+            ORDER BY j.created_at DESC
+            LIMIT %s OFFSET %s
+        """
+
+        params_with_paging = params + [limit, offset]
+
+        cursor.execute(data_query, tuple(params_with_paging))
+        jobs = cursor.fetchall()
+
+        return {
+            "data": [dict(row) for row in jobs],
+            "total": total,
+            "page": page,
+            "limit": limit
+        }
+
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/jobs/mine")
+def get_my_jobs(x_user_id: str = Header(None)):
+    if not x_user_id:
+        raise HTTPException(status_code=401, detail="Missing X-User-Id header")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT j.job_id, j.job_title, j.company_name, j.description, COUNT(a.app_id) as applicant_count
+            FROM jobs j
+            LEFT JOIN applications a ON j.job_id = a.job_id
+            WHERE j.owner_id = %s
+            GROUP BY j.job_id
+            ORDER BY j.created_at DESC
+        """, (x_user_id,))
+        jobs = cursor.fetchall()
+        return {"data": [dict(row) for row in jobs]}
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/leaderboard")
+def get_leaderboard(page: int = 1, limit: int = 20, search: str = None):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    offset = (page - 1) * limit
+    
+    # Enforce limit of 500 total results
+    max_total = 500
+    
+    try:
+        # Build query parts
+        base_query = "FROM global_leaderboard WHERE global_rank <= 500"
+        params = []
+        
+        if search:
+            base_query += " AND username ILIKE %s"
+            params.append(f"%{search}%")
+            
+        # Get total count (capped at 500)
+        cursor.execute(f"SELECT count(*) {base_query}", tuple(params))
+        total = cursor.fetchone()['count']
+        
+        # Get data
+        query = f"SELECT * {base_query} ORDER BY global_rank ASC LIMIT %s OFFSET %s"
+        params.extend([limit, offset])
+        
+        cursor.execute(query, tuple(params))
+        leaderboard = cursor.fetchall()
+        
+        return {
+            "data": [dict(row) for row in leaderboard],
+            "total": total,
+            "page": page,
+            "limit": limit
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.get("/api/users/{username}")
+def get_user(username: str):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+        user = cursor.fetchone()
+        if user is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        return dict(user)
+    finally:
+        cursor.close()
+        conn.close()
+
+@app.post("/api/jobs/parse")
+async def parse_job_file_endpoint(file: UploadFile = File(...), user_id: str = Header(None, alias="X-User-Id")):
+    if not user_id:
+         raise HTTPException(status_code=401, detail="Unauthorized")
+
+    try:
+        content = await file.read()
+        parsed_data = parse_job_file(content, file.filename)
+        return {"data": parsed_data}
+    except Exception as e:
+        print(f"Parsing error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to parse job file")
+
+if __name__ == "__main__":
+    import uvicorn
+    # Run on port 3000
+    uvicorn.run(app, host="0.0.0.0", port=3000)
