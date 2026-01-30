@@ -83,54 +83,74 @@ interface JobDescriptionProps {
 
 export function JobDescription({ descriptionText, className }: JobDescriptionProps) {
   const parsed = parseJobDescription(descriptionText)
+  const hasStructuredContent =
+    parsed.roleDescription ||
+    parsed.qualifications.length > 0 ||
+    parsed.salaryRange ||
+    parsed.track ||
+    parsed.careerLevel
+  const useFallback = !hasStructuredContent && descriptionText.trim().length > 0
 
   return (
     <Card className={`border-purple-200 ${className || ''}`}>
-      <CardHeader>
-        <CardTitle className="text-2xl text-black">{parsed.title}</CardTitle>
-        <div className="flex flex-wrap gap-2 mt-2">
-          {parsed.track && (
-            <Badge variant="outline" className="border-purple-300 text-purple-700">
-              <TrendingUp className="h-3 w-3 mr-1" />
-              {parsed.track}
-            </Badge>
-          )}
-          {parsed.careerLevel && (
-            <Badge variant="outline" className="border-purple-300 text-purple-700">
-              <Briefcase className="h-3 w-3 mr-1" />
-              {parsed.careerLevel}
-            </Badge>
-          )}
-          {parsed.salaryRange && (
-            <Badge variant="outline" className="border-purple-300 text-purple-700">
-              <DollarSign className="h-3 w-3 mr-1" />
-              {parsed.salaryRange}
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {parsed.roleDescription && (
-          <div>
-            <h3 className="text-lg font-semibold text-black mb-2">Role Description</h3>
-            <p className="text-gray-700 leading-relaxed">{parsed.roleDescription}</p>
-          </div>
-        )}
+      {useFallback ? (
+        <>
+          <CardHeader>
+            <CardTitle className="text-lg text-black">Job Description</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{descriptionText.trim()}</p>
+          </CardContent>
+        </>
+      ) : (
+        <>
+          <CardHeader>
+            <CardTitle className="text-2xl text-black">{parsed.title}</CardTitle>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {parsed.track && (
+                <Badge variant="outline" className="border-purple-300 text-purple-700">
+                  <TrendingUp className="h-3 w-3 mr-1" />
+                  {parsed.track}
+                </Badge>
+              )}
+              {parsed.careerLevel && (
+                <Badge variant="outline" className="border-purple-300 text-purple-700">
+                  <Briefcase className="h-3 w-3 mr-1" />
+                  {parsed.careerLevel}
+                </Badge>
+              )}
+              {parsed.salaryRange && (
+                <Badge variant="outline" className="border-purple-300 text-purple-700">
+                  <DollarSign className="h-3 w-3 mr-1" />
+                  {parsed.salaryRange}
+                </Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {parsed.roleDescription && (
+              <div>
+                <h3 className="text-lg font-semibold text-black mb-2">Role Description</h3>
+                <p className="text-gray-700 leading-relaxed">{parsed.roleDescription}</p>
+              </div>
+            )}
 
-        {parsed.qualifications.length > 0 && (
-          <div>
-            <h3 className="text-lg font-semibold text-black mb-3">Qualifications</h3>
-            <ul className="space-y-2">
-              {parsed.qualifications.map((qual, index) => (
-                <li key={index} className="flex items-start gap-2 text-gray-700">
-                  <span className="text-primary mt-1.5">•</span>
-                  <span>{qual}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </CardContent>
+            {parsed.qualifications.length > 0 && (
+              <div>
+                <h3 className="text-lg font-semibold text-black mb-3">Qualifications</h3>
+                <ul className="space-y-2">
+                  {parsed.qualifications.map((qual, index) => (
+                    <li key={index} className="flex items-start gap-2 text-gray-700">
+                      <span className="text-primary mt-1.5">•</span>
+                      <span>{qual}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </>
+      )}
     </Card>
   )
 }
