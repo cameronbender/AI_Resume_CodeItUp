@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
@@ -27,6 +27,42 @@ import { TrendingUp, Upload as UploadIcon, FileText, CheckCircle2 } from "lucide
 // }
 
 
+// Backend tier order and MMR thresholds (from schema: update_user_rank)
+const TIER_ORDER = ["Barista", "Intern", "Junior Dev", "Senior Dev", "Managing Director", "CEO"] as const
+const MMR_THRESHOLDS: Record<string, number> = {
+  Barista: 0,
+  Intern: 1000,
+  "Junior Dev": 2000,
+  "Senior Dev": 3000,
+  "Managing Director": 4000,
+  CEO: 5000,
+}
+// Min avg match score required to rank up to each tier (respectively: 50, 60, 70, 80, 90)
+const MIN_MATCH_SCORE_FOR_NEXT_TIER: Record<string, number> = {
+  Intern: 50,
+  "Junior Dev": 60,
+  "Senior Dev": 70,
+  "Managing Director": 80,
+  CEO: 90,
+}
+
+function getTierProgress(mmr: number, currentTier: string): { progressPercent: number; nextTier: string | null; mmrInTier: number; mmrNeededForNext: number } {
+  const tierIndex = TIER_ORDER.indexOf(currentTier as typeof TIER_ORDER[number])
+  if (tierIndex < 0) {
+    return { progressPercent: 0, nextTier: TIER_ORDER[1] ?? null, mmrInTier: mmr, mmrNeededForNext: 1000 }
+  }
+  if (tierIndex === TIER_ORDER.length - 1) {
+    return { progressPercent: 100, nextTier: null, mmrInTier: Math.max(0, mmr - MMR_THRESHOLDS[currentTier]), mmrNeededForNext: 0 }
+  }
+  const currentMin = MMR_THRESHOLDS[currentTier] ?? 0
+  const nextTier = TIER_ORDER[tierIndex + 1]
+  const nextMin = MMR_THRESHOLDS[nextTier] ?? 5000
+  const range = nextMin - currentMin
+  const mmrInTier = Math.max(0, mmr - currentMin)
+  const progressPercent = range > 0 ? Math.min(100, Math.round((mmrInTier / range) * 100)) : 100
+  return { progressPercent, nextTier: nextTier ?? null, mmrInTier, mmrNeededForNext: nextMin - currentMin }
+}
+
 function mapTierToRankBadge(profileTier?: string): "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger" {
   const tierMap: Record<string, "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger"> = {
     Barista: "Iron",
@@ -54,6 +90,20 @@ export function Profile() {
   const { user: authUser, setUser } = useAuth()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploaded, setUploaded] = useState(false)
+  const [avgMatchScore, setAvgMatchScore] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!authUser?.user_id) {
+      setAvgMatchScore(null)
+      return
+    }
+    fetch(`/api/users/${authUser.user_id}/profile-stats`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { avg_match_score?: number | null } | null) => {
+        setAvgMatchScore(data?.avg_match_score ?? null)
+      })
+      .catch(() => setAvgMatchScore(null))
+  }, [authUser?.user_id])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -111,15 +161,15 @@ export function Profile() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-600">MMR</p>
+                  <p className="text-sm text-gray-600">Avg Match Score</p>
                   <p className="text-3xl font-bold text-primary">
-                    {authUser?.mmr_score ?? "--"}
+                    {avgMatchScore != null ? avgMatchScore.toFixed(1) : "--"}
                   </p>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid md:grid-cols-3 gap-6">
+              <div className="grid md:grid-cols-4 gap-6">
                 <div>
                   <p className="text-sm text-gray-600 mb-1">MMR Score</p>
                   <p className="text-4xl font-bold text-primary">{authUser?.mmr_score ?? "--"}</p>
@@ -127,6 +177,23 @@ export function Profile() {
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Current Tier</p>
                   <p className="text-4xl font-bold text-purple-600">{authUser?.current_tier ?? "--"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 mb-1">Streak</p>
+                  <p className="text-4xl font-bold text-black flex items-center gap-1">
+                    {authUser?.streak_count != null ? (
+                      authUser.streak_count > 0 ? (
+                        <>
+                          {authUser.streak_count}
+                          <span className="text-2xl" title="Applications with 80+ match in a row">🔥</span>
+                        </>
+                      ) : (
+                        "0"
+                      )
+                    ) : (
+                      "--"
+                    )}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Resume on file</p>
@@ -137,28 +204,60 @@ export function Profile() {
           </Card>
 
           <div className="grid md:grid-cols-2 gap-6">
-            {/* Progress to Next Tier */}
-            {/* TODO: Fetch tier progress from backend */}
+            {/* Progress to Next Tier – driven by MMR and backend tier thresholds */}
             <Card className="border-purple-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <TrendingUp className="h-5 w-5 text-primary" />
                   Progress to Next Tier
                 </CardTitle>
-                {/* TODO: Display profile.nextTierName */}
-                <CardDescription>Next Tier</CardDescription>
+                <CardDescription>
+                  {authUser?.current_tier && authUser?.mmr_score !== undefined
+                    ? (() => {
+                        const { nextTier } = getTierProgress(authUser.mmr_score, authUser.current_tier)
+                        if (!nextTier) return "You’re at max tier"
+                        const mmrReq = MMR_THRESHOLDS[nextTier] ?? "—"
+                        const matchReq = MIN_MATCH_SCORE_FOR_NEXT_TIER[nextTier] ?? "—"
+                        return `Rank up to ${nextTier}: ${mmrReq} MMR and ${matchReq}+ avg match score`
+                      })()
+                    : "Based on your MMR and avg match score"}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <div className="flex justify-between text-sm mb-2">
-                    {/* TODO: Display current and next tier names */}
-                    <span className="text-gray-600">Current Tier</span>
-                    <span className="text-gray-600">Next Tier</span>
+                    <span className="text-gray-600">{authUser?.current_tier ?? "Current Tier"}</span>
+                    <span className="text-gray-600">
+                      {authUser?.current_tier && authUser?.mmr_score !== undefined
+                        ? getTierProgress(authUser.mmr_score, authUser.current_tier).nextTier ?? "Max"
+                        : "Next Tier"}
+                    </span>
                   </div>
-                  {/* TODO: Display progress bar with profile.progressToNext */}
-                  <Progress value={0} className="h-3" />
+                  <Progress
+                    value={
+                      authUser?.current_tier && authUser?.mmr_score !== undefined
+                        ? getTierProgress(authUser.mmr_score, authUser.current_tier).progressPercent
+                        : 0
+                    }
+                    className="h-3"
+                  />
                   <p className="text-center text-sm text-gray-600 mt-2">
-                    --% to next tier
+                    {authUser?.current_tier && authUser?.mmr_score !== undefined
+                      ? (() => {
+                          const { progressPercent, nextTier, mmrInTier, mmrNeededForNext } = getTierProgress(
+                            authUser.mmr_score,
+                            authUser.current_tier
+                          )
+                          if (!nextTier) return "100% — Max tier"
+                          const matchReq = MIN_MATCH_SCORE_FOR_NEXT_TIER[nextTier]
+                          const avgMet = avgMatchScore != null && avgMatchScore >= matchReq
+                          const matchText =
+                            avgMatchScore != null
+                              ? `Avg match: ${avgMatchScore.toFixed(1)} (need ${matchReq}+) ${avgMet ? "✓" : ""}`
+                              : `Avg match: -- (need ${matchReq}+)`
+                          return `${progressPercent}% to next tier · ${mmrInTier} / ${mmrNeededForNext} MMR · ${matchText}`
+                        })()
+                      : "--% to next tier"}
                   </p>
                 </div>
               </CardContent>

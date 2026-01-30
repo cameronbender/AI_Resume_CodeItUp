@@ -4,13 +4,22 @@ import { JobDescription } from "./JobDescription"
 import { Button } from "@/components/ui/button"
 import { RankBadge } from "@/components/RankBadge"
 import { useAuth } from "@/contexts/AuthContext"
-import { Zap, Loader2, CheckCircle2, Users } from "lucide-react"
+import { Zap, Loader2, CheckCircle2, Users, Info } from "lucide-react"
+
+interface ApplicationAnalysis {
+  strengths?: string[]
+  weaknesses?: string[]
+  ai_insult?: string
+  /** Backend AI returns a single "analysis" string (STRENGTHS/WEAKNESSES/SCORING EXPLANATION) */
+  analysis?: string
+}
 
 interface TopApplicant {
   username: string
   match_score: number
   current_tier: string
   rank?: number
+  analysis?: ApplicationAnalysis | null
 }
 
 interface JobModalProps {
@@ -21,6 +30,10 @@ interface JobModalProps {
   company?: string
   description: string
   matchScore?: number
+}
+
+function displayAnalysisText(text: string): string {
+  return text.replace(/You used quick apply[^.]*\.?/gi, "Applied before feedback implementation.")
 }
 
 function mapTierToRankBadge(tier?: string): "Iron" | "Bronze" | "Silver" | "Gold" | "Challenger" {
@@ -53,6 +66,7 @@ export function JobModal({
   const [quickApplyLoading, setQuickApplyLoading] = useState(false)
   const [quickApplyDone, setQuickApplyDone] = useState(false)
   const [quickApplyError, setQuickApplyError] = useState<string | null>(null)
+  const [analysisPopupApplicant, setAnalysisPopupApplicant] = useState<TopApplicant | null>(null)
 
   useEffect(() => {
     if (open && jobId) {
@@ -112,6 +126,7 @@ export function JobModal({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent onClose={() => onOpenChange(false)} className="max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -191,6 +206,15 @@ export function JobModal({
                         <span className="font-medium text-black truncate block">{a.username}</span>
                         <span className="text-xs text-gray-500">{a.match_score}% match</span>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-primary hover:text-primary/90 shrink-0"
+                        onClick={() => setAnalysisPopupApplicant(a)}
+                      >
+                        <Info className="h-4 w-4 mr-1" />
+                        See why
+                      </Button>
                     </li>
                   ))}
                 </ul>
@@ -200,5 +224,71 @@ export function JobModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* See why – analysis popup (sibling so it layers on top) */}
+    <Dialog open={!!analysisPopupApplicant} onOpenChange={(open) => !open && setAnalysisPopupApplicant(null)}>
+      <DialogContent className="max-w-2xl" onClose={() => setAnalysisPopupApplicant(null)}>
+        <DialogHeader>
+          <DialogTitle className="text-lg">
+            {analysisPopupApplicant?.username} · {analysisPopupApplicant?.match_score}% match
+          </DialogTitle>
+        </DialogHeader>
+        {analysisPopupApplicant && (
+          <div className="space-y-3 text-sm">
+            <p className="text-gray-600">
+              Tier: <span className="font-medium text-black">{analysisPopupApplicant.current_tier}</span>
+            </p>
+            {analysisPopupApplicant.analysis && (
+              <>
+                {typeof analysisPopupApplicant.analysis.analysis === "string" ? (
+                  <div className="rounded-lg bg-gray-50 p-4 border border-gray-200">
+                    <p className="font-medium text-black mb-2">Analysis</p>
+                    <pre className="text-gray-700 whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                      {displayAnalysisText(analysisPopupApplicant.analysis.analysis)}
+                    </pre>
+                  </div>
+                ) : (
+                  <>
+                    {analysisPopupApplicant.analysis.strengths && analysisPopupApplicant.analysis.strengths.length > 0 && (
+                      <div>
+                        <p className="font-medium text-black mb-1">Strengths</p>
+                        <ul className="list-disc list-inside text-gray-700 space-y-0.5">
+                          {analysisPopupApplicant.analysis.strengths.map((s, i) => (
+                            <li key={i}>{s}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {analysisPopupApplicant.analysis.weaknesses && analysisPopupApplicant.analysis.weaknesses.length > 0 && (
+                      <div>
+                        <p className="font-medium text-black mb-1">Areas to improve</p>
+                        <ul className="list-disc list-inside text-gray-700 space-y-0.5">
+                          {analysisPopupApplicant.analysis.weaknesses.map((w, i) => (
+                            <li key={i}>{w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {analysisPopupApplicant.analysis.ai_insult && (
+                      <p className="text-amber-700 italic border-l-2 border-amber-300 pl-2">
+                        {displayAnalysisText(analysisPopupApplicant.analysis.ai_insult)}
+                      </p>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+            {(!analysisPopupApplicant.analysis ||
+              (typeof analysisPopupApplicant.analysis.analysis !== "string" &&
+                !analysisPopupApplicant.analysis.strengths?.length &&
+                !analysisPopupApplicant.analysis.weaknesses?.length &&
+                !analysisPopupApplicant.analysis.ai_insult)) && (
+              <p className="text-gray-500 italic">Detailed feedback will appear here when available.</p>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  </>
   )
 }

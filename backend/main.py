@@ -105,7 +105,7 @@ def signup(user: UserSignup):
         cursor.execute("""
             INSERT INTO users (username, email, password_hash, role)
             VALUES (%s, %s, %s, %s)
-            RETURNING user_id, username, email, role, mmr_score, current_tier, 
+            RETURNING user_id, username, email, role, mmr_score, current_tier, streak_count,
                       (resume_data IS NOT NULL) as has_resume
         """, (user.username, user.email, hashed_password, user.role))
         
@@ -322,7 +322,7 @@ def get_job_applicants(job_id: str, limit: int = 5):
     cursor = conn.cursor()
     try:
         cursor.execute("""
-            SELECT u.username, a.match_score, u.current_tier
+            SELECT u.username, a.match_score, u.current_tier, a.analysis
             FROM applications a
             JOIN users u ON a.user_id = u.user_id
             WHERE a.job_id = %s

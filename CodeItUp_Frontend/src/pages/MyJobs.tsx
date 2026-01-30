@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/AuthContext"
-import { FolderOpen, Briefcase, ChevronRight, Users, Plus, Trash2 } from "lucide-react"
+import { FolderOpen, Briefcase, ChevronRight, Users, Plus, Trash2, Info } from "lucide-react"
 
 interface Job {
   job_id: string
@@ -15,8 +15,26 @@ interface Job {
   applicant_count?: number
 }
 
+interface ApplicationAnalysis {
+  strengths?: string[]
+  weaknesses?: string[]
+  ai_insult?: string
+  analysis?: string
+}
+
+interface Applicant {
+  username: string
+  match_score: number
+  current_tier: string
+  analysis?: ApplicationAnalysis | null
+}
+
+function displayAnalysisText(text: string): string {
+  return text.replace(/You used quick apply[^.]*\.?/gi, "Applied before feedback implementation.")
+}
+
 interface JobWithApplicants extends Job {
-  applicants?: { username: string; match_score: number; current_tier: string }[]
+  applicants?: Applicant[]
 }
 
 export function MyJobs() {
@@ -26,6 +44,7 @@ export function MyJobs() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null)
+  const [analysisPopupApplicant, setAnalysisPopupApplicant] = useState<Applicant | null>(null)
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== "recruiter") {
@@ -59,7 +78,7 @@ export function MyJobs() {
     setExpandedJobId(jobId)
     fetch(`/api/jobs/${jobId}/applicants?limit=20`)
       .then((res) => res.ok ? res.json() : { data: [] })
-      .then((data: { data: { username: string; match_score: number; current_tier: string }[] }) => {
+      .then((data: { data: Applicant[] }) => {
         setJobs((prev) =>
           prev.map((j) =>
             j.job_id === jobId ? { ...j, applicants: data.data || [] } : j
@@ -336,12 +355,21 @@ export function MyJobs() {
                         {job.applicants.map((a, i) => (
                           <li
                             key={i}
-                            className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg"
+                            className="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg gap-2"
                           >
                             <span className="font-medium">{a.username}</span>
                             <span className="text-sm text-gray-600">
                               {a.match_score}% match · {a.current_tier}
                             </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-primary hover:text-primary/90 shrink-0"
+                              onClick={() => setAnalysisPopupApplicant(a)}
+                            >
+                              <Info className="h-4 w-4 mr-1" />
+                              See why
+                            </Button>
                           </li>
                         ))}
                       </ul>
@@ -352,6 +380,71 @@ export function MyJobs() {
             ))}
           </div>
         )}
+
+        {/* See why – analysis popup */}
+        <Dialog open={!!analysisPopupApplicant} onOpenChange={(open) => !open && setAnalysisPopupApplicant(null)}>
+          <DialogContent className="max-w-2xl" onClose={() => setAnalysisPopupApplicant(null)}>
+            <DialogHeader>
+              <DialogTitle className="text-lg">
+                {analysisPopupApplicant?.username} · {analysisPopupApplicant?.match_score}% match
+              </DialogTitle>
+            </DialogHeader>
+            {analysisPopupApplicant && (
+              <div className="space-y-3 text-sm">
+                <p className="text-gray-600">
+                  Tier: <span className="font-medium text-black">{analysisPopupApplicant.current_tier}</span>
+                </p>
+                {analysisPopupApplicant.analysis && (
+                  <>
+                    {typeof analysisPopupApplicant.analysis.analysis === "string" ? (
+                      <div className="rounded-lg bg-gray-50 p-4 border border-gray-200">
+                        <p className="font-medium text-black mb-2">Analysis</p>
+                        <pre className="text-gray-700 whitespace-pre-wrap font-sans text-sm leading-relaxed">
+                          {displayAnalysisText(analysisPopupApplicant.analysis.analysis)}
+                        </pre>
+                      </div>
+                    ) : (
+                      <>
+                        {analysisPopupApplicant.analysis.strengths?.length ? (
+                          <div>
+                            <p className="font-medium text-black mb-1">Strengths</p>
+                            <ul className="list-disc list-inside text-gray-700 space-y-0.5">
+                              {analysisPopupApplicant.analysis.strengths.map((s, i) => (
+                                <li key={i}>{s}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {analysisPopupApplicant.analysis.weaknesses?.length ? (
+                          <div>
+                            <p className="font-medium text-black mb-1">Areas to improve</p>
+                            <ul className="list-disc list-inside text-gray-700 space-y-0.5">
+                              {analysisPopupApplicant.analysis.weaknesses.map((w, i) => (
+                                <li key={i}>{w}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : null}
+                        {analysisPopupApplicant.analysis.ai_insult && (
+                          <p className="text-amber-700 italic border-l-2 border-amber-300 pl-2">
+                            {displayAnalysisText(analysisPopupApplicant.analysis.ai_insult)}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+                {(!analysisPopupApplicant.analysis ||
+                  (typeof analysisPopupApplicant.analysis.analysis !== "string" &&
+                    !analysisPopupApplicant.analysis.strengths?.length &&
+                    !analysisPopupApplicant.analysis.weaknesses?.length &&
+                    !analysisPopupApplicant.analysis.ai_insult)) && (
+                  <p className="text-gray-500 italic">Detailed feedback will appear here when available.</p>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

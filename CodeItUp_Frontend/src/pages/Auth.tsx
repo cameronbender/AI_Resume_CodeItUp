@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { useAuth } from "@/contexts/AuthContext"
+import { useAuth, type User as AuthUser } from "@/contexts/AuthContext"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -62,16 +62,33 @@ export function Auth() {
         body: JSON.stringify(body),
       })
 
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.detail || "Authentication failed")
+      const text = await res.text()
+      let data: { detail?: string; [key: string]: unknown } | null = null
+      try {
+        data = text ? JSON.parse(text) : null
+      } catch {
+        // Server returned non-JSON (e.g. plain text error)
+        if (!res.ok) {
+          throw new Error(text || "Authentication failed")
+        }
+        throw new Error("Invalid response from server")
       }
 
-      setUser(data)
+      if (!res.ok) {
+        throw new Error(
+          (data && typeof data.detail === "string" ? data.detail : null) ||
+            (typeof data?.detail === "object" && data.detail !== null
+              ? JSON.stringify(data.detail)
+              : null) ||
+            "Authentication failed"
+        )
+      }
+
+      const user = data as unknown as AuthUser
+      setUser(user)
 
       // Redirect: recruiter -> My Jobs, applicant -> Jobs
-      navigate(data.role === "recruiter" ? "/my-jobs" : "/jobs")
+      navigate(user.role === "recruiter" ? "/my-jobs" : "/jobs")
 
     } catch (err: any) {
       console.error("Auth error:", err)

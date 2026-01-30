@@ -68,4 +68,3 @@ export function JobCard({
     </Card>
   )
 }
-
